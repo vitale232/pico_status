@@ -1,1 +1,4 @@
+.env
 secrets.py
+/client/target
+
