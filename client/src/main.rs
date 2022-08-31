@@ -3,14 +3,10 @@ extern crate dotenv_codegen;
 #[macro_use]
 extern crate serde;
 
-use std::{
-    fmt::format,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::oneshot;
-use urlencoding::encode;
-use warp::{path::param, Filter};
+use warp::Filter;
 
 static CLIENT_ID: &str = dotenv!("CLIENT_ID");
 static CLIENT_SECRET: &str = dotenv!("CLIENT_SECRET");
@@ -23,6 +19,14 @@ pub struct Config {
     pub tenant_id: String,
     pub port: u16,
     pub access_code: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenRequestBody {
+    client_id: String,
+    redirect_uri: String,
+    code: String,
+    grant_type: String,
 }
 
 impl Config {
@@ -60,22 +64,21 @@ impl Config {
         )
     }
 
-    fn get_access_token_body(&self) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
-        let access_code = match &self.access_code {
+    fn to_token_request_body(&self) -> TokenRequestBody {
+        let code = match &self.access_code {
             Some(ac) => ac,
             None => panic!("No Access Code available."),
         };
-        let params = vec![
-            ("code".into(), access_code.into()),
-            ("client_id".into(), String::from(&self.client_id)),
-            ("redirect_uri".into(), self.get_redirect_uri()),
-            ("grant_type".into(), "authorization_code".into()),
-        ];
-        Ok(params)
+        TokenRequestBody {
+            code: code.into(),
+            client_id: self.client_id.clone(),
+            redirect_uri: self.get_redirect_uri(),
+            grant_type: String::from("authorization_code"),
+        }
     }
 
     fn get_redirect_uri(&self) -> String {
-        encode(&format!("http://localhost:{}/redirect", self.port)).into()
+        format!("http://localhost:{}/redirect", self.port)
     }
 
     fn set_access_code(&mut self, ac: &str) {
@@ -96,32 +99,21 @@ struct AccessCode {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct AccessToken {
-    access_token: String,
     token_type: String,
-    expires_in: i64,
     scope: String,
+    expires_in: i64,
+    ext_expires_in: i64,
+    access_token: String,
     refresh_token: String,
-    user_id: String,
 }
 
-impl AccessToken {
-    pub fn new(
-        token_type: &str,
-        expires_in: i64,
-        scope: &str,
-        access_token: &str,
-        refresh_token: &str,
-        user_id: &str,
-    ) -> Self {
-        AccessToken {
-            token_type: token_type.into(),
-            expires_in,
-            scope: scope.into(),
-            access_token: access_token.into(),
-            refresh_token: refresh_token.into(),
-            user_id: user_id.into(),
-        }
-    }
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct Presence {
+    #[serde(rename = "@odata.context")]
+    contect: String,
+    id: String,
+    availability: String,
+    activity: String,
 }
 
 #[tokio::main]
@@ -130,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(Mutex::new(Config::new(CLIENT_ID, CLIENT_SECRET, TENANT_ID)));
     let scope = "Presence.Read Calendars.read offline_access";
 
-    webbrowser::open(&config.lock().unwrap().get_authorize_url(&scope))
+    webbrowser::open(&config.lock().unwrap().get_authorize_url(scope))
         .expect("Could not open browser");
 
     let access_code = warp::get()
@@ -166,11 +158,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("sleeping... This is where the program can start with a token?");
     println!("Speaking of tokens: {:#?}", config);
     let client = reqwest::Client::new();
-    let auth_url = config.lock().unwrap().get_authorize_url(scope);
-    let params = config.lock().unwrap().get_authorize_query(scope);
-    let res = client.post(auth_url).form(&params).send().await?;
-    println!("Response: {:#?}", res);
-    tokio::time::sleep(tokio::time::Duration::from_secs(69)).await;
+    let token_url = config.lock().unwrap().get_token_url();
+    let body = config.lock().unwrap().to_token_request_body();
+    println!("token_url: {:#?}", token_url);
+    println!("body: {:#?}", body);
+
+    let token = client
+        .post(token_url)
+        .form(&body)
+        .send()
+        .await?
+        .json::<AccessToken>()
+        .await?;
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    println!("T: {:#?}", token);
+
+    let presence = client
+        .get("https://graph.microsoft.com/v1.0/me/presence")
+        .header("Authorization", format!("Bearer {}", token.access_token))
+        .send()
+        .await?
+        .json::<Presence>()
+        .await?;
+    println!("presence: {:#?}", presence);
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    println!("bye");
     Ok(())
 }
 

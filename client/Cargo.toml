@@ -7,14 +7,9 @@ edition = "2021"
 
 [dependencies]
 dotenv_codegen = "0.15.0"
-graph-http = "0.2.2"
-graph-oauth = "0.2.0"
-graph-rs = "0.2.0"
-graph-rs-sdk = "0.3.0"
-reqwest = "0.11.11"
+reqwest = { version = "0.11.11", features = ["json"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
-tokio = { version = "1.20.1", features = ["time"] }
-urlencoding = "2.1.0"
+tokio = { version = "1.20.1", features = ["full"] }
 warp = "0.3.2"
 webbrowser = "0.7.1"
