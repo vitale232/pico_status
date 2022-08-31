@@ -133,7 +133,7 @@ Content-Type: text/html
             """
 
 
-def serve(connection, LCD):
+def serve(connection, lcd):
     print("Staring server...")
     color_state = "GREEN"
     while True:
@@ -143,7 +143,7 @@ def serve(connection, LCD):
         print(f"Incoming Request:\n{request}")
         try:
             (color_state, top_text, bottom_text) = parse_request(request, color_state)
-            paint_state(LCD, color_state, top_text, bottom_text)
+            paint_state(lcd, color_state, top_text, bottom_text)
             html = render(color_state)
             client.send(html)
             client.close()
@@ -152,15 +152,15 @@ def serve(connection, LCD):
             client.close()
 
 
-def listen_for_retry_click(LCD, a_button, b_button):
+def listen_for_retry_click(lcd, a_button, b_button):
     while True:
         if a_button.value() == 0:
-            paint_reconnect(LCD, "Trying new server...", "If this fails, reboot!")
+            paint_reconnect(lcd, "Trying new server...", "If this fails, reboot!")
             sleep(2)
             return
         if b_button.value() == 0:
             paint_reconnect(
-                LCD, "Trying to re-establish server...", "If this fails, reboot!"
+                lcd, "Trying to re-establish server...", "If this fails, reboot!"
             )
             sleep(2)
             return
@@ -174,10 +174,10 @@ if __name__ == "__main__":
     keyA = Pin(15, Pin.IN, Pin.PULL_UP)
     keyB = Pin(17, Pin.IN, Pin.PULL_UP)
 
-    LCD = LCD_1inch14()
+    lcd = LCD_1inch14()
     # color BRG
-    paint_boot(LCD, "Waiting for connection...")
-    LCD.show()
+    paint_boot(lcd, "Waiting for connection...")
+    lcd.show()
 
     sleep(2)
 
@@ -186,12 +186,12 @@ if __name__ == "__main__":
         try:
             ip = connect()
             connection = open_socket(ip)
-            paint_ready(LCD, "Ready and accepting requests!", ip)
+            paint_ready(lcd, "Ready and accepting requests!", ip)
 
-            serve(connection, LCD)
+            serve(connection, lcd)
         except Exception as exc:
             if connection:
                 connection.close()
             print(f"An error occurred: {exc}")
-            paint_error(LCD, ssid, ERROR_AFTER_SECS, retry=True)
-            listen_for_retry_click(LCD, keyA, keyB)
+            paint_error(lcd, ssid, ERROR_AFTER_SECS, retry=True)
+            listen_for_retry_click(lcd, keyA, keyB)
