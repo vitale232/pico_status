@@ -11,6 +11,7 @@ use warp::Filter;
 static CLIENT_ID: &str = dotenv!("CLIENT_ID");
 static CLIENT_SECRET: &str = dotenv!("CLIENT_SECRET");
 static TENANT_ID: &str = dotenv!("TENANT_ID");
+static PI_IP: &str = dotenv!("PI_IP");
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -110,10 +111,10 @@ struct AccessToken {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct Presence {
     #[serde(rename = "@odata.context")]
-    contect: String,
-    id: String,
-    availability: String,
-    activity: String,
+    pub context: String,
+    pub id: String,
+    pub availability: String,
+    pub activity: String,
 }
 
 #[tokio::main]
@@ -122,29 +123,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(Mutex::new(Config::new(CLIENT_ID, CLIENT_SECRET, TENANT_ID)));
     let scope = "Presence.Read Calendars.read offline_access";
 
-    webbrowser::open(&config.lock().unwrap().get_authorize_url(scope))
-        .expect("Could not open browser");
-
     let access_code = warp::get()
         .and(warp::path("redirect"))
         .and(with_config(config.clone()))
         .and(warp::query::<AccessCode>())
         .map(|c: OAuthConfiguration, ac: AccessCode| {
             c.lock().unwrap().set_access_code(&ac.code);
-            println!("AC:::: {:?}", ac);
             ac.code
         });
 
-    let p = config.lock().unwrap().get_port();
+    webbrowser::open(&config.lock().unwrap().get_authorize_url(scope))
+        .expect("Could not open browser");
+
+    let port = config.lock().unwrap().get_port();
     let (_, server) =
-        warp::serve(access_code).bind_with_graceful_shutdown(([127, 0, 0, 1], p), async move {
+        warp::serve(access_code).bind_with_graceful_shutdown(([127, 0, 0, 1], port), async move {
             println!("waiting for signal");
             killrx.await.expect("Error handling shutdown receiver");
             println!("got signal");
         });
 
     tokio::spawn(async {
-        let secs = 5;
+        let secs = 10;
         println!("Dooms day prepping, {} seconds to go...", secs);
         tokio::time::sleep(tokio::time::Duration::from_secs(secs)).await;
         killtx.send(1).expect("Could not send kill signal!");
@@ -155,14 +155,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("An error occurred in Join! {:?}", e),
     }
 
-    println!("sleeping... This is where the program can start with a token?");
-    println!("Speaking of tokens: {:#?}", config);
     let client = reqwest::Client::new();
+
     let token_url = config.lock().unwrap().get_token_url();
     let body = config.lock().unwrap().to_token_request_body();
-    println!("token_url: {:#?}", token_url);
-    println!("body: {:#?}", body);
-
     let token = client
         .post(token_url)
         .form(&body)
@@ -171,7 +167,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .json::<AccessToken>()
         .await?;
 
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     println!("T: {:#?}", token);
 
     let presence = client
@@ -183,8 +178,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     println!("presence: {:#?}", presence);
 
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    println!("bye");
+    let pires = client
+        .get(format!(
+            "http://{}/green?top_text=Availability: {}&bottom_text= Activity: {}",
+            PI_IP, presence.availability, presence.activity
+        ))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    println!("Pi Response: {:#?}", pires);
     Ok(())
 }
 
