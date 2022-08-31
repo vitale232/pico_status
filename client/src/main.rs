@@ -3,7 +3,10 @@ extern crate dotenv_codegen;
 #[macro_use]
 extern crate serde;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    fmt::Display,
+    sync::{Arc, Mutex},
+};
 
 use tokio::sync::oneshot;
 use warp::Filter;
@@ -113,8 +116,96 @@ struct Presence {
     #[serde(rename = "@odata.context")]
     pub context: String,
     pub id: String,
-    pub availability: String,
-    pub activity: String,
+    pub availability: Availability,
+    pub activity: Activity,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+enum Availability {
+    Available,
+    AvailableIdle,
+    Away,
+    BeRightBack,
+    Busy,
+    BusyIdle,
+    DoNotDisturb,
+    Offline,
+    PresenceUnknown,
+}
+
+impl Display for Availability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let val = match self {
+            Availability::Available => "Available",
+            Availability::AvailableIdle => "AvailableIdle",
+            Availability::Away => "Away",
+            Availability::BeRightBack => "BeRightBack",
+            Availability::Busy => "Busy",
+            Availability::BusyIdle => "BusyIdle",
+            Availability::DoNotDisturb => "DoNotDisturb",
+            Availability::Offline => "Offline",
+            Availability::PresenceUnknown => "PresenceUnknown",
+        };
+        write!(f, "{}", val)
+    }
+}
+
+impl Presence {
+    fn screen_color(&self) -> String {
+        match self.availability {
+            Availability::Available => "green".into(),
+            Availability::AvailableIdle => "yellow".into(),
+            Availability::Away => "yellow".into(),
+            Availability::BeRightBack => "yellow".into(),
+            Availability::Busy => "red".into(),
+            Availability::BusyIdle => "red".into(),
+            Availability::DoNotDisturb => "red".into(),
+            Availability::Offline => "yellow".into(),
+            Availability::PresenceUnknown => "yellow".into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+enum Activity {
+    Available,
+    Away,
+    BeRightBack,
+    Busy,
+    DoNotDisturb,
+    InACall,
+    InAConferenceCall,
+    Inactive,
+    InAMeeting,
+    Offline,
+    OffWork,
+    OutOfOffice,
+    PresenceUnknown,
+    Presenting,
+    UrgentInterruptionsOnly,
+}
+
+impl Display for Activity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let val = match self {
+            Activity::Available => "Available",
+            Activity::Away => "Away",
+            Activity::BeRightBack => "BeRightBack",
+            Activity::Busy => "Busy",
+            Activity::DoNotDisturb => "DotNotDisturb",
+            Activity::InACall => "InACall",
+            Activity::InAConferenceCall => "InAConferenceCall",
+            Activity::Inactive => "Inactive",
+            Activity::InAMeeting => "InAMeeting",
+            Activity::Offline => "Offline",
+            Activity::OffWork => "OffWork",
+            Activity::OutOfOffice => "OutOfOffice",
+            Activity::PresenceUnknown => "PresenceUnknown",
+            Activity::Presenting => "Presenting",
+            Activity::UrgentInterruptionsOnly => "UrgentInterruptionsOnly",
+        };
+        write!(f, "{}", val)
+    }
 }
 
 #[tokio::main]
@@ -144,7 +235,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
     tokio::spawn(async {
-        let secs = 10;
+        let secs = 5;
         println!("Dooms day prepping, {} seconds to go...", secs);
         tokio::time::sleep(tokio::time::Duration::from_secs(secs)).await;
         killtx.send(1).expect("Could not send kill signal!");
@@ -178,15 +269,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     println!("presence: {:#?}", presence);
 
-    let pires = client
-        .get(format!(
-            "http://{}/green?top_text=Availability: {}&bottom_text= Activity: {}",
-            PI_IP, presence.availability, presence.activity
-        ))
-        .send()
-        .await?
-        .text()
-        .await?;
+    let pico_url = format!(
+        "http://{}/{}?top_text=Availability: {}&bottom_text=Activity: {}",
+        PI_IP,
+        presence.screen_color(),
+        presence.availability,
+        presence.activity
+    );
+    let pires = client.get(pico_url).send().await?.text().await?;
 
     println!("Pi Response: {:#?}", pires);
     Ok(())
