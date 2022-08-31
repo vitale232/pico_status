@@ -387,7 +387,7 @@ def render(temperature, state):
 HTTP/1.1 200 OK
 Cache-Control: no-cache
 Server: pi-in-the-sky
-Content-Type text/html
+Content-Type: text/html
 
             <!DOCTYPE html>
             <html>
