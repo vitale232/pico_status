@@ -1,3 +1,5 @@
+# https://www.waveshare.com/wiki/Pico-LCD-1.14
+
 from machine import Pin, SPI
 import framebuf
 
