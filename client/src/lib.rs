@@ -10,6 +10,8 @@ pub mod oauth {
 
     pub type OAuthConfiguration = Arc<Mutex<Config>>;
 
+    const WAIT_FOR_SECS: u64 = 5;
+
     pub async fn flow(
         config: OAuthConfiguration,
         scope: &str,
@@ -22,7 +24,30 @@ pub mod oauth {
             .and(warp::query::<AccessCode>())
             .map(|c: OAuthConfiguration, ac: AccessCode| {
                 c.lock().unwrap().set_access_code(&ac.code);
-                ac.code
+                // ac.code
+                warp::reply::html(format!(
+                    r#"
+                    <!DOCTYPE html>
+                    <html lang='en'>
+                      <head>
+                        <meta charset='UTF-8' />
+                        <meta http-equiv='X-UA-Compatible' content='IE=edge' />
+                        <meta name='viewport' content='device-width' />
+                        <title>Warp OAuth</title>
+                      </head>
+                      <body>
+                        <h1>Access Code</h1>
+                        <p>Access code recieved!</p>
+                        <code>{}</code>
+                      </body>
+                      <script>
+                        setTimeout(() => window.location.reload(), {})
+                      </script>
+                    </html>
+                    "#,
+                    ac.code,
+                    WAIT_FOR_SECS * 1_000 + 1_000
+                ))
             });
 
         webbrowser::open(&config.lock().unwrap().get_authorize_url(scope))
@@ -39,9 +64,8 @@ pub mod oauth {
         );
 
         tokio::spawn(async {
-            let secs = 5;
-            println!("Dooms day prepping, {} seconds to go...", secs);
-            tokio::time::sleep(tokio::time::Duration::from_secs(secs)).await;
+            println!("Dooms day prepping, {} seconds to go...", WAIT_FOR_SECS);
+            tokio::time::sleep(tokio::time::Duration::from_secs(WAIT_FOR_SECS)).await;
             killtx.send(1).expect("Could not send kill signal!");
         });
 
