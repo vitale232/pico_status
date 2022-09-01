@@ -10,7 +10,6 @@ mod oauth;
 use oauth::OAuthConfiguration;
 
 mod status;
-
 use crate::status::{get_presence, set_status};
 
 static CLIENT_ID: &str = dotenv!("CLIENT_ID");
