@@ -3,17 +3,13 @@ extern crate dotenv_codegen;
 #[macro_use]
 extern crate serde;
 
-use std::{
-    fmt::Display,
-    sync::{Arc, Mutex},
-};
+use std::fmt::Display;
 
-use lib::oauth::{self, Config};
+use lib::oauth::{self, use_autorefresh, OAuthConfiguration};
 use reqwest::Client;
 use tokio::time::Duration;
 
 static CLIENT_ID: &str = dotenv!("CLIENT_ID");
-static CLIENT_SECRET: &str = dotenv!("CLIENT_SECRET");
 static TENANT_ID: &str = dotenv!("TENANT_ID");
 static PI_IP: &str = dotenv!("PI_IP");
 
@@ -118,17 +114,20 @@ impl Display for Activity {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Arc::new(Mutex::new(Config::new(CLIENT_ID, CLIENT_SECRET, TENANT_ID)));
     let scope = "Presence.Read Calendars.read offline_access";
+    let config = OAuthConfiguration::new(CLIENT_ID, TENANT_ID, scope);
 
     let client = Client::new();
-    let token = oauth::flow(config, scope, &client).await?;
-    println!("{:#?}", token);
+    let token = oauth::flow(config.clone(), &client).await?;
+    use_autorefresh(token.clone(), config.clone(), 120);
 
     loop {
         let presence = client
             .get("https://graph.microsoft.com/v1.0/me/presence")
-            .header("Authorization", format!("Bearer {}", token.access_token))
+            .header(
+                "Authorization",
+                format!("Bearer {}", token.get_access_token()),
+            )
             .send()
             .await?
             .json::<Presence>()
