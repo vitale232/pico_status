@@ -3,9 +3,11 @@ extern crate dotenv_codegen;
 #[macro_use]
 extern crate serde;
 
+mod oauth;
+use oauth::OAuthConfiguration;
+
 use std::fmt::Display;
 
-use lib::oauth::{self, use_autorefresh, OAuthConfiguration};
 use reqwest::Client;
 use tokio::time::Duration;
 
@@ -119,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = Client::new();
     let token = oauth::flow(config.clone(), &client).await?;
-    use_autorefresh(token.clone(), config.clone(), 120);
+    oauth::use_autorefresh(token.clone(), config.clone(), 120);
 
     loop {
         let presence = client
