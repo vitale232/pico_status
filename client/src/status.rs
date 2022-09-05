@@ -151,17 +151,28 @@ impl Status {
         }
     }
 
-    fn line5(&self) -> String {
+    fn is_in_meeting(&self) -> bool {
         let now = Utc::now();
-        if now > self.meeting_start && now < self.meeting_end {
+        now > self.meeting_start && now < self.meeting_end
+    }
+
+    fn line5(&self) -> String {
+        if self.is_in_meeting() {
             return "  Meeting goes until:".into();
         }
         "  Next Meeting:".into()
     }
 
     fn line6(&self) -> String {
-        let start = self.meeting_start.with_timezone(&Local);
-        format!("{} ({})", start.format("%I:%M %P"), self.meeting_subject)
+        let time = match self.is_in_meeting() {
+            true => self.meeting_end,
+            false => self.meeting_start,
+        };
+        format!(
+            "{} ({})",
+            time.with_timezone(&Local).format("%I:%M %P"),
+            self.meeting_subject
+        )
     }
 }
 
