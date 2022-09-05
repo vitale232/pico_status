@@ -3,8 +3,10 @@ extern crate dotenv_codegen;
 #[macro_use]
 extern crate serde;
 
-use reqwest::Client;
 use tokio::time::Duration;
+
+mod http;
+use http::SharedHttpClient;
 
 mod oauth;
 use oauth::OAuthConfiguration;
@@ -16,16 +18,17 @@ static CLIENT_ID: &str = dotenv!("CLIENT_ID");
 static TENANT_ID: &str = dotenv!("TENANT_ID");
 static PI_IP: &str = dotenv!("PI_IP");
 
-const POLL_AFTER_SECS: u64 = 150;
+const POLL_AFTER_SECS: u64 = 60;
+const REFRESH_EXPIRY_PADDING_SECS: u64 = 120;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scope = "Presence.Read Calendars.read offline_access";
     let config = OAuthConfiguration::new(CLIENT_ID, TENANT_ID, scope);
 
-    let client = Client::new();
+    let client = SharedHttpClient::new();
     let token = oauth::flow(config.clone(), &client).await?;
-    oauth::use_autorefresh(token.clone(), config.clone(), 120);
+    oauth::use_autorefresh(token.clone(), config.clone(), REFRESH_EXPIRY_PADDING_SECS);
 
     loop {
         let presence = get_presence(&client, &token).await?;

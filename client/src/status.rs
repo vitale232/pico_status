@@ -1,12 +1,14 @@
 use std::fmt::Display;
 
-use crate::oauth::SharedAccessToken;
+use crate::{http::SharedHttpClient, oauth::SharedAccessToken};
 
 pub async fn get_presence(
-    client: &reqwest::Client,
+    client: &SharedHttpClient,
     token: &SharedAccessToken,
 ) -> Result<Presence, Box<dyn std::error::Error>> {
     let pres = client
+        .get_client()
+        .await
         .get("https://graph.microsoft.com/v1.0/me/presence")
         .header(
             "Authorization",
@@ -20,7 +22,7 @@ pub async fn get_presence(
 }
 
 pub async fn set_status(
-    client: &reqwest::Client,
+    client: &SharedHttpClient,
     presence: &Presence,
     pi_ip_addr: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -31,7 +33,14 @@ pub async fn set_status(
         presence.availability,
         presence.activity
     );
-    let pires = client.get(pico_url).send().await?.text().await?;
+    let pires = client
+        .get_client()
+        .await
+        .get(pico_url)
+        .send()
+        .await?
+        .text()
+        .await?;
     Ok(pires)
 }
 

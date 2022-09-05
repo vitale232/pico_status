@@ -1,14 +1,18 @@
 use std::sync::{Arc, Mutex};
 
 use reqwest::Client;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use tokio::{sync::oneshot, time::Duration};
 use warp::Filter;
+
+use crate::http::SharedHttpClient;
 
 const WAIT_FOR_SECS: u64 = 5;
 
 pub async fn flow(
     config: OAuthConfiguration,
-    client: &Client,
+    client: &SharedHttpClient,
 ) -> Result<SharedAccessToken, Box<dyn std::error::Error>> {
     let (killtx, killrx) = oneshot::channel::<u8>();
     let access_code_filter = warp::get()
@@ -54,21 +58,19 @@ pub async fn flow(
             println!("got signal");
         },
     );
-
     tokio::spawn(async {
-        println!("Dooms day prepping, {} seconds to go...", WAIT_FOR_SECS);
+        println!("{} seconds to go...", WAIT_FOR_SECS);
         tokio::time::sleep(tokio::time::Duration::from_secs(WAIT_FOR_SECS)).await;
         killtx.send(1).expect("Could not send kill signal!");
+        println!("Graceful killshot transmitted")
     });
-
-    match tokio::join!(tokio::task::spawn(server)).0 {
-        Ok(()) => println!("serving..."),
-        Err(e) => println!("An error occurred in Join! {:?}", e),
-    };
+    tokio::task::spawn(server).await?;
 
     let token_url = config.get_token_url();
     let body = config.to_token_request_body();
     let token = client
+        .get_client()
+        .await
         .post(token_url)
         .form(&body)
         .send()
@@ -88,13 +90,16 @@ fn with_config(
 
 pub fn use_autorefresh(token: SharedAccessToken, config: OAuthConfiguration, pad_secs: u64) {
     tokio::spawn(async move {
-        let c = reqwest::Client::new();
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+        let client = ClientBuilder::new(Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
         let wait_time = token.get_expires_in() - pad_secs;
         println!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
         loop {
             println!("Refresh sleeping {} seconds...", wait_time);
             tokio::time::sleep(Duration::from_secs(wait_time)).await;
-            do_refresh(&c, &token, &config)
+            do_refresh(&client, &token, &config)
                 .await
                 .expect("Could not refresh token!");
         }
@@ -102,7 +107,7 @@ pub fn use_autorefresh(token: SharedAccessToken, config: OAuthConfiguration, pad
 }
 
 async fn do_refresh(
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
     token: &SharedAccessToken,
     config: &OAuthConfiguration,
 ) -> Result<(), Box<dyn std::error::Error>> {
