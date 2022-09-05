@@ -115,7 +115,11 @@ def parse_text(text):
 
     for el in text:
         print(f"{el}")
-        (param, val) = el.split("=")
+        try:
+            (param, val) = el.split("=")
+        except Exception as exc:
+            print(f"Could not unpack params due to the exception: {exc}. Skipping.")
+            continue
         print(f"param={param}, val={val}")
         if param == "line1":
             line1 = unquote(val)
@@ -215,3 +219,5 @@ if __name__ == "__main__":
             print(f"An error occurred: {exc}")
             paint.paint_error(lcd, ssid, ERROR_AFTER_SECS, retry=True)
             listen_for_retry_click(lcd, keyA, keyB)
+
+

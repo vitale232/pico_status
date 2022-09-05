@@ -34,7 +34,7 @@ def paint_boot(lcd, text):
 
 def paint_reconnect(lcd, top_text, bottom_text):
     lcd.fill(colors["purple"])
-    lcd.fill(colors["purple"])
+    lcd.fill(colors['purple'])
     if top_text:
         lcd.text(trim(top_text), 2, 20, colors["white"])
     if bottom_text:
@@ -64,17 +64,9 @@ def paint_error(lcd, ssid, error_after_secs, retry=False):
 
 
 def paint_status(
-    lcd,
-    color_state,
-    line1=None,
-    line2=None,
-    line3=None,
-    line4=None,
-    line5=None,
-    line6=None,
-    line7=None,
+    lcd, color_state, line1=None, line2=None, line3=None, line4=None, line5=None, line6=None, line7=None
 ):
-    print(f"paint_status: color_state={color_state}, lines1,2={line1}{line2}")
+    print(f'paint_status: color_state={color_state}, lines1,2={line1}{line2}')
     text_color = colors["black"]
     if color_state == "GREEN":
         lcd.fill(colors["green"])
