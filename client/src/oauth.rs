@@ -193,6 +193,21 @@ impl Config {
         }
     }
 
+    /// Panics! Panics when invoked while the `access_code` property is the
+    /// `None` variant
+    fn to_token_request_body(&self) -> AccessTokenRequestBody {
+        let code = match &self.access_code {
+            Some(ac) => ac,
+            None => panic!("No Access Code available."),
+        };
+        AccessTokenRequestBody {
+            code: code.into(),
+            client_id: self.client_id.clone(),
+            redirect_uri: self.get_redirect_uri(),
+            grant_type: String::from("authorization_code"),
+        }
+    }
+
     fn get_authorize_url(&self) -> String {
         format!(
             "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize?{}",
@@ -223,21 +238,6 @@ impl Config {
 
     fn get_scope(&self) -> String {
         self.scope.clone()
-    }
-
-    /// Panics! Panics when invoked while the `access_code` property is the
-    /// `None` variant
-    fn to_token_request_body(&self) -> AccessTokenRequestBody {
-        let code = match &self.access_code {
-            Some(ac) => ac,
-            None => panic!("No Access Code available."),
-        };
-        AccessTokenRequestBody {
-            code: code.into(),
-            client_id: self.client_id.clone(),
-            redirect_uri: self.get_redirect_uri(),
-            grant_type: String::from("authorization_code"),
-        }
     }
 
     fn get_redirect_uri(&self) -> String {
