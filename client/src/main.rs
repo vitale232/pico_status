@@ -12,7 +12,7 @@ mod oauth;
 use oauth::OAuthConfiguration;
 
 mod status;
-use crate::status::{get_presence, set_status};
+use crate::status::{get_status, set_status};
 
 static CLIENT_ID: &str = dotenv!("CLIENT_ID");
 static TENANT_ID: &str = dotenv!("TENANT_ID");
@@ -36,10 +36,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     loop {
-        let presence = get_presence(&client, &token).await?;
-        println!("presence: {:#?}", presence);
+        let status = get_status(&client, &token).await?;
 
-        let pires = set_status(&client, &presence, PI_IP).await?;
+        let pires = set_status(&client, &status, PI_IP).await?;
         println!("Pi Response: {:#?}", pires);
 
         println!("Sleeping for {} seconds...", POLL_AFTER_SECS);

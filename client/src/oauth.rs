@@ -5,7 +5,7 @@ use warp::Filter;
 
 use crate::http::SharedHttpClient;
 
-const WAIT_FOR_SECS: u64 = 5;
+const WAIT_FOR_SECS: u64 = 3;
 
 pub async fn flow(
     config: OAuthConfiguration,
