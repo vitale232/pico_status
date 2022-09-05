@@ -28,7 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = SharedHttpClient::new();
     let token = oauth::flow(config.clone(), &client).await?;
-    oauth::use_autorefresh(token.clone(), config.clone(), REFRESH_EXPIRY_PADDING_SECS);
+    oauth::use_autorefresh(
+        client.clone(),
+        token.clone(),
+        config.clone(),
+        REFRESH_EXPIRY_PADDING_SECS,
+    );
 
     loop {
         let presence = get_presence(&client, &token).await?;
