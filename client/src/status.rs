@@ -153,7 +153,7 @@ impl Status {
 
     fn line5(&self) -> String {
         let now = Utc::now();
-        if now > self.meeting_start && self.meeting_end < now {
+        if now > self.meeting_start && now < self.meeting_end {
             return "  Meeting goes until:".into();
         }
         "  Next Meeting:".into()
