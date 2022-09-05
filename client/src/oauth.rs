@@ -1,8 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use reqwest::Client;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use tokio::{sync::oneshot, time::Duration};
 use warp::Filter;
 
@@ -88,18 +85,19 @@ fn with_config(
     warp::any().map(move || config.clone())
 }
 
-pub fn use_autorefresh(token: SharedAccessToken, config: OAuthConfiguration, pad_secs: u64) {
+pub fn use_autorefresh(
+    client: SharedHttpClient,
+    token: SharedAccessToken,
+    config: OAuthConfiguration,
+    pad_secs: u64,
+) {
     tokio::spawn(async move {
-        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-        let client = ClientBuilder::new(Client::new())
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
         let wait_time = token.get_expires_in() - pad_secs;
         println!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
         loop {
             println!("Refresh sleeping {} seconds...", wait_time);
             tokio::time::sleep(Duration::from_secs(wait_time)).await;
-            do_refresh(&client, &token, &config)
+            do_refresh(client.clone(), &token, &config)
                 .await
                 .expect("Could not refresh token!");
         }
@@ -107,13 +105,15 @@ pub fn use_autorefresh(token: SharedAccessToken, config: OAuthConfiguration, pad
 }
 
 async fn do_refresh(
-    client: &ClientWithMiddleware,
+    client: SharedHttpClient,
     token: &SharedAccessToken,
     config: &OAuthConfiguration,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let refresh_url = config.get_token_url();
     let body = config.to_token_refresh_body(&token.get_refresh_token());
     let res = client
+        .get_client()
+        .await
         .post(refresh_url)
         .form(&body)
         .send()
@@ -193,6 +193,21 @@ impl Config {
         }
     }
 
+    /// Panics! Panics when invoked while the `access_code` property is the
+    /// `None` variant
+    fn to_token_request_body(&self) -> AccessTokenRequestBody {
+        let code = match &self.access_code {
+            Some(ac) => ac,
+            None => panic!("No Access Code available."),
+        };
+        AccessTokenRequestBody {
+            code: code.into(),
+            client_id: self.client_id.clone(),
+            redirect_uri: self.get_redirect_uri(),
+            grant_type: String::from("authorization_code"),
+        }
+    }
+
     fn get_authorize_url(&self) -> String {
         format!(
             "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize?{}",
@@ -223,21 +238,6 @@ impl Config {
 
     fn get_scope(&self) -> String {
         self.scope.clone()
-    }
-
-    /// Panics! Panics when invoked while the `access_code` property is the
-    /// `None` variant
-    fn to_token_request_body(&self) -> AccessTokenRequestBody {
-        let code = match &self.access_code {
-            Some(ac) => ac,
-            None => panic!("No Access Code available."),
-        };
-        AccessTokenRequestBody {
-            code: code.into(),
-            client_id: self.client_id.clone(),
-            redirect_uri: self.get_redirect_uri(),
-            grant_type: String::from("authorization_code"),
-        }
     }
 
     fn get_redirect_uri(&self) -> String {
