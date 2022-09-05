@@ -5,7 +5,7 @@ from time import sleep
 
 from secrets import ssid, password
 from waveshare import LCD_1inch14, BL
-from paint import *
+import paint
 
 ERROR_AFTER_SECS = 10
 
@@ -24,6 +24,7 @@ def unquote(string):
         string = string.encode("utf-8")
 
     bits = string.split(b"%")
+    print(f"bits={bits}")
     if len(bits) == 1:
         return string
 
@@ -76,41 +77,61 @@ def open_socket(ip):
 
 
 def parse_request(req, state):
+    print(f"parsing request::{req}\nwith state::{state}")
+
+    url = ""
     try:
-        req = req.split()[1]
+        url = req.split()[1]
     except IndexError:
+        print(f"INDEX ERROR!! PASSING!")
         pass
-    url_parts = req.split("?")
-    top_text = ""
-    bottom_text = ""
-    if len(url_parts) == 0:
-        return state
-    if len(url_parts) == 1:
-        req = url_parts[0]
-    if len(url_parts) == 2:
-        req = url_parts[0]
-        (top_text, bottom_text) = parse_text(url_parts[1])
-    if req == "/green":
+    print(f"url {url}")
+
+    url_parts = url.split("?")
+    path = url_parts[0]
+
+    if path == "/green":
         state = "GREEN"
-    if req == "/yellow":
+    if path == "/yellow":
         state = "YELLOW"
-    if req == "/red":
+    if path == "/red":
         state = "RED"
 
-    return (state, top_text, bottom_text)
+    line1, line2, line3, line4, line5, line6, line7 = "", "", "", "", "", "", ""
+    print(f"url_parts={url_parts}")
+    if len(url_parts) == 1:
+        pass
+    else:
+        (line1, line2, line3, line4, line5, line6, line7) = parse_text(url_parts[1])
+
+    print(f"ret:: {(state, line1, line2, line3, line4, line5, line6, line7)}")
+    return (state, line1, line2, line3, line4, line5, line6, line7)
 
 
 def parse_text(text):
+    print(f"parsing text: {text}")
     text = text.replace("?", "").split("&")
-    top_text = ""
-    bottom_text = ""
+    line1, line2, line3, line4, line5, line6, line7 = "", "", "", "", "", "", ""
+
     for el in text:
+        print(f"{el}")
         (param, val) = el.split("=")
-        if param == "top_text":
-            top_text = unquote(val)
-        if param == "bottom_text":
-            bottom_text = unquote(val)
-    return (top_text, bottom_text)
+        print(f"param={param}, val={val}")
+        if param == "line1":
+            line1 = unquote(val)
+        if param == "line2":
+            line2 = unquote(val)
+        if param == "line3":
+            line3 = unquote(val)
+        if param == "line4":
+            line4 = unquote(val)
+        if param == "line5":
+            line5 = unquote(val)
+        if param == "line6":
+            line6 = unquote(val)
+        if param == "line7":
+            line7 = unquote(val)
+    return (line1, line2, line3, line4, line5, line6, line7)
 
 
 def render(state):
@@ -142,24 +163,23 @@ def serve(connection, lcd):
         request = str(request)
         print(f"Incoming Request:\n{request}")
         try:
-            (color_state, top_text, bottom_text) = parse_request(request, color_state)
-            paint_state(lcd, color_state, top_text, bottom_text)
+            paint.paint_status(lcd, *parse_request(request, color_state))
             html = render(color_state)
             client.send(html)
             client.close()
-        except Exception:
-            print("Could not parse request")
+        except Exception as exc:
+            print(f"An exception occurred: {exc}")
             client.close()
 
 
 def listen_for_retry_click(lcd, a_button, b_button):
     while True:
         if a_button.value() == 0:
-            paint_reconnect(lcd, "Trying new server...", "If this fails, reboot!")
+            paint.paint_reconnect(lcd, "Trying new server...", "If this fails, reboot!")
             sleep(2)
             return
         if b_button.value() == 0:
-            paint_reconnect(
+            paint.paint_reconnect(
                 lcd, "Trying to re-establish server...", "If this fails, reboot!"
             )
             sleep(2)
@@ -176,7 +196,7 @@ if __name__ == "__main__":
 
     lcd = LCD_1inch14()
     # color BRG
-    paint_boot(lcd, "Waiting for connection...")
+    paint.paint_boot(lcd, "Waiting for connection...")
     lcd.show()
 
     sleep(2)
@@ -186,12 +206,12 @@ if __name__ == "__main__":
         try:
             ip = connect()
             connection = open_socket(ip)
-            paint_ready(lcd, "Ready and accepting requests!", ip)
+            paint.paint_ready(lcd, "Ready and accepting requests!", ip)
 
             serve(connection, lcd)
         except Exception as exc:
             if connection:
                 connection.close()
             print(f"An error occurred: {exc}")
-            paint_error(lcd, ssid, ERROR_AFTER_SECS, retry=True)
+            paint.paint_error(lcd, ssid, ERROR_AFTER_SECS, retry=True)
             listen_for_retry_click(lcd, keyA, keyB)

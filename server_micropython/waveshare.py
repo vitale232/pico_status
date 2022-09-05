@@ -11,15 +11,6 @@ SCK = 10
 CS = 9
 
 
-# https://thepihut.com/blogs/raspberry-pi-tutorials/coding-colour-with-micropython-on-raspberry-pi-pico-displays
-def color(R, G, B):  # Convert RGB888 to RGB565
-    return (
-        (((G & 0b00011100) << 3) + ((B & 0b11111000) >> 3) << 8)
-        + (R & 0b11111000)
-        + ((G & 0b11100000) >> 5)
-    )
-
-
 class LCD_1inch14(framebuf.FrameBuffer):
     def __init__(self):
         self.width = 240
@@ -39,17 +30,6 @@ class LCD_1inch14(framebuf.FrameBuffer):
         self.buffer = bytearray(self.height * self.width * 2)
         super().__init__(self.buffer, self.width, self.height, framebuf.RGB565)
         self.init_display()
-
-        self.red = color(255, 0, 0)
-        self.yellow = color(255, 255, 0)
-        self.green = color(0, 255, 0)  #
-
-        self.white = color(255, 255, 255)  # 0xffff
-        self.black = color(0, 0, 0)
-
-        self.orange = color(204, 132, 0)
-        self.purple = color(111, 0, 255)
-        self.pink = color(254, 221, 228)
 
         self.bg_color = "GREEN"  # "RED" or "GREEN" or "YELLOW"
 
