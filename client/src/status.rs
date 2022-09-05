@@ -80,7 +80,9 @@ impl Status {
     pub fn new(presence: &Presence, calendar: &CalendarView) -> Self {
         let next_meeting = calendar.value.first();
         Self {
-            meeting_attendee_count: calendar.value.len(),
+            meeting_attendee_count: next_meeting
+                .map(|mtg| mtg.attendees.len())
+                .unwrap_or_default(),
             availability: presence.availability.clone(),
             activity: presence.activity.clone(),
             meeting_start: next_meeting.map(|mtg| mtg.start).unwrap_or_default(),
