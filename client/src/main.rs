@@ -6,7 +6,6 @@ extern crate serde;
 use tokio::time::Duration;
 
 mod http;
-use http::SharedHttpClient;
 
 mod oauth;
 use oauth::OAuthConfiguration;
@@ -26,9 +25,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scope = "Presence.Read Calendars.read offline_access";
     let config = OAuthConfiguration::new(CLIENT_ID, TENANT_ID, scope);
 
-    let client = SharedHttpClient::new();
+    let client = http::build_durable_client();
     let token = oauth::flow(config.clone(), &client).await?;
-    oauth::use_autorefresh(
+    token.autorefresh(
         client.clone(),
         token.clone(),
         config.clone(),

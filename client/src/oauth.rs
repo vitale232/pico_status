@@ -3,13 +3,13 @@ use std::sync::{Arc, Mutex};
 use tokio::{sync::oneshot, time::Duration};
 use warp::Filter;
 
-use crate::http::SharedHttpClient;
+use crate::http::DurableClient;
 
 const WAIT_FOR_SECS: u64 = 3;
 
 pub async fn flow(
     config: OAuthConfiguration,
-    client: &SharedHttpClient,
+    client: &DurableClient,
 ) -> Result<SharedAccessToken, Box<dyn std::error::Error>> {
     let (killtx, killrx) = oneshot::channel::<u8>();
     let access_code_filter = warp::get()
@@ -66,8 +66,6 @@ pub async fn flow(
     let token_url = config.get_token_url();
     let body = config.to_token_request_body();
     let token = client
-        .get_client()
-        .await
         .post(token_url)
         .form(&body)
         .send()
@@ -83,46 +81,6 @@ fn with_config(
     config: OAuthConfiguration,
 ) -> impl Filter<Extract = (OAuthConfiguration,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || config.clone())
-}
-
-pub fn use_autorefresh(
-    client: SharedHttpClient,
-    token: SharedAccessToken,
-    config: OAuthConfiguration,
-    pad_secs: u64,
-) {
-    tokio::spawn(async move {
-        let wait_time = token.get_expires_in() - pad_secs;
-        println!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
-        loop {
-            println!("Refresh sleeping {} seconds...", wait_time);
-            tokio::time::sleep(Duration::from_secs(wait_time)).await;
-            do_refresh(client.clone(), &token, &config)
-                .await
-                .expect("Could not refresh token!");
-        }
-    });
-}
-
-async fn do_refresh(
-    client: SharedHttpClient,
-    token: &SharedAccessToken,
-    config: &OAuthConfiguration,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let refresh_url = config.get_token_url();
-    let body = config.to_token_refresh_body(&token.get_refresh_token());
-    let res = client
-        .get_client()
-        .await
-        .post(refresh_url)
-        .form(&body)
-        .send()
-        .await?
-        .json::<AccessToken>()
-        .await?;
-    println!("Refresh response: {:#?}", res);
-    token.apply_refresh(res);
-    Ok(())
 }
 
 #[derive(Clone)]
@@ -294,6 +252,45 @@ impl SharedAccessToken {
         SharedAccessToken {
             data: Arc::new(Mutex::new(token)),
         }
+    }
+
+    pub fn autorefresh(
+        &self,
+        client: DurableClient,
+        token: SharedAccessToken,
+        config: OAuthConfiguration,
+        pad_secs: u64,
+    ) {
+        tokio::spawn(async move {
+            let wait_time = token.get_expires_in() - pad_secs;
+            println!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
+            loop {
+                println!("Refresh sleeping {} seconds...", wait_time);
+                tokio::time::sleep(Duration::from_secs(wait_time)).await;
+                Self::do_refresh(client.clone(), &token, &config)
+                    .await
+                    .expect("Could not refresh token!");
+            }
+        });
+    }
+
+    async fn do_refresh(
+        client: DurableClient,
+        token: &SharedAccessToken,
+        config: &OAuthConfiguration,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let refresh_url = config.get_token_url();
+        let body = config.to_token_refresh_body(&token.get_refresh_token());
+        let res = client
+            .post(refresh_url)
+            .form(&body)
+            .send()
+            .await?
+            .json::<AccessToken>()
+            .await?;
+        println!("Refresh response: {:#?}", res);
+        token.apply_refresh(res);
+        Ok(())
     }
 
     fn apply_refresh(&self, payload: AccessToken) {

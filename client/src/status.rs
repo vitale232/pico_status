@@ -3,10 +3,11 @@ use std::{collections::HashMap, fmt::Display};
 use chrono::{DateTime, Duration, Local, NaiveDateTime, Utc};
 use serde::{de, Deserialize, Deserializer};
 
-use crate::{http::SharedHttpClient, oauth::SharedAccessToken};
+use crate::http::DurableClient;
+use crate::oauth::SharedAccessToken;
 
 pub async fn get_status(
-    client: &SharedHttpClient,
+    client: &DurableClient,
     token: &SharedAccessToken,
 ) -> Result<Status, Box<dyn std::error::Error>> {
     // TODO: Make these simultaneouse to take advantage of the tokio runtime
@@ -21,30 +22,21 @@ pub async fn get_status(
 }
 
 pub async fn set_status(
-    client: &SharedHttpClient,
+    client: &DurableClient,
     status: &Status,
     pi_ip_addr: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let pico_url = format!("http://{}/{}", pi_ip_addr, status.uri());
     println!("pico_url={}", pico_url);
-    let pires = client
-        .get_client()
-        .await
-        .get(pico_url)
-        .send()
-        .await?
-        .text()
-        .await?;
+    let pires = client.get(pico_url).send().await?.text().await?;
     Ok(pires)
 }
 
 pub async fn get_presence(
-    client: &SharedHttpClient,
+    client: &DurableClient,
     token: &SharedAccessToken,
 ) -> Result<Presence, Box<dyn std::error::Error>> {
     let pres = client
-        .get_client()
-        .await
         .get("https://graph.microsoft.com/v1.0/me/presence")
         .header(
             "Authorization",
@@ -58,7 +50,7 @@ pub async fn get_presence(
 }
 
 pub async fn get_calendar(
-    client: &SharedHttpClient,
+    client: &DurableClient,
     token: &SharedAccessToken,
 ) -> Result<CalendarView, Box<dyn std::error::Error>> {
     let today = Utc::now();
@@ -73,8 +65,6 @@ pub async fn get_calendar(
     );
     println!("{:#?}", cal_url);
     let cal = client
-        .get_client()
-        .await
         .get(cal_url)
         .header(
             "Authorization",
