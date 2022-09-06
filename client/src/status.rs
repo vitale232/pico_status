@@ -20,6 +20,24 @@ pub async fn get_status(
     Ok(status)
 }
 
+pub async fn set_status(
+    client: &SharedHttpClient,
+    status: &Status,
+    pi_ip_addr: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let pico_url = format!("http://{}/{}", pi_ip_addr, status.uri());
+    println!("pico_url={}", pico_url);
+    let pires = client
+        .get_client()
+        .await
+        .get(pico_url)
+        .send()
+        .await?
+        .text()
+        .await?;
+    Ok(pires)
+}
+
 pub async fn get_presence(
     client: &SharedHttpClient,
     token: &SharedAccessToken,
@@ -97,7 +115,7 @@ impl Status {
         }
     }
 
-    pub fn paint_status_uri(&self) -> String {
+    pub fn uri(&self) -> String {
         format!(
             "{}?line2={}&line3={}&line5={}&line6=   {}&line7=   {} attendees",
             self.screen_color(),
@@ -109,7 +127,12 @@ impl Status {
         )
     }
 
-    fn screen_color(&self) -> String {
+    pub fn is_in_meeting(&self) -> bool {
+        let now = Utc::now();
+        now > self.meeting_start && now < self.meeting_end
+    }
+
+    pub fn screen_color(&self) -> String {
         match self.availability {
             Availability::Available => "green".into(),
             Availability::AvailableIdle => "yellow".into(),
@@ -157,11 +180,6 @@ impl Status {
         }
     }
 
-    fn is_in_meeting(&self) -> bool {
-        let now = Utc::now();
-        now > self.meeting_start && now < self.meeting_end
-    }
-
     fn line5(&self) -> String {
         if self.is_in_meeting() {
             return "  Meeting goes until:".into();
@@ -182,24 +200,6 @@ impl Status {
     }
 }
 
-pub async fn set_status(
-    client: &SharedHttpClient,
-    status: &Status,
-    pi_ip_addr: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let pico_url = format!("http://{}/{}", pi_ip_addr, status.paint_status_uri());
-    println!("pico_url={}", pico_url);
-    let pires = client
-        .get_client()
-        .await
-        .get(pico_url)
-        .send()
-        .await?
-        .text()
-        .await?;
-    Ok(pires)
-}
-
 #[derive(Clone, Debug, Deserialize)]
 pub struct Presence {
     pub id: String,
@@ -217,21 +217,6 @@ pub struct GraphDateTimeZone {
 pub struct Attendee {
     #[serde(rename = "type")]
     pub type_: String,
-}
-
-fn deser_msgraph_datetimezone_utc<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let map_datetime_obj: HashMap<String, String> = Deserialize::deserialize(deserializer)?;
-    let datetime = match map_datetime_obj.get("dateTime") {
-        Some(dt) => dt,
-        // I have no idea what this will do at runtime.
-        None => "",
-    };
-    NaiveDateTime::parse_from_str(datetime, "%Y-%m-%dT%H:%M:%S%.f")
-        .map_err(de::Error::custom)
-        .map(|val| DateTime::<Utc>::from_utc(val, Utc))
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -286,6 +271,21 @@ impl Display for Availability {
         };
         write!(f, "{}", val)
     }
+}
+
+fn deser_msgraph_datetimezone_utc<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let map_datetime_obj: HashMap<String, String> = Deserialize::deserialize(deserializer)?;
+    let datetime = match map_datetime_obj.get("dateTime") {
+        Some(dt) => dt,
+        // I have no idea what this will do at runtime.
+        None => "",
+    };
+    NaiveDateTime::parse_from_str(datetime, "%Y-%m-%dT%H:%M:%S%.f")
+        .map_err(de::Error::custom)
+        .map(|val| DateTime::<Utc>::from_utc(val, Utc))
 }
 
 #[derive(Clone, Debug, Deserialize)]
