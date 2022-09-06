@@ -145,17 +145,20 @@ Cache-Control: no-cache
 Server: pi-in-the-sky
 Content-Type: text/html
 
-            <!DOCTYPE html>
-            <html>
-            <a href="/green">Green</a>
-            <br /> <br />
-            <a href="/yellow">Yellow</a>
-            <br /> <br />
-            <a href="/red">Red</a>
-            <p>Screen is {state}</p>
-            </body>
-            </html>
-            """
+<!DOCTYPE html><html> <a href="/green">Green</a><br /> <br /><a href="/yellow">Yellow</a><br /> <br /><a href="/red">Red</a><p>Screen is {state}</p></body></html>
+"""
+
+def render404():
+    return """
+HTTP/1.1 404 Not Found
+Cache-Control: no-cache
+Server: pi-in-the-sky
+Content-Type: text/html
+"""
+
+def is_supported_url(request):
+    url = request.split()[1].lower()
+    return url.startswith('/red') or url.startswith('/yellow') or url.startswith('/green')
 
 
 def serve(connection, lcd):
@@ -166,9 +169,14 @@ def serve(connection, lcd):
         request = client.recv(1024)
         request = str(request)
         print(f"Incoming Request:\n{request}")
+        html = ""
         try:
-            paint.paint_status(lcd, *parse_request(request, color_state))
-            html = render(color_state)
+            if not is_supported_url(request):
+                html = render404()
+            else:
+                paint.paint_status(lcd, *parse_request(request, color_state))
+                html = render(color_state)
+            print(f'html={html}')
             client.send(html)
             client.close()
         except Exception as exc:
@@ -219,5 +227,3 @@ if __name__ == "__main__":
             print(f"An error occurred: {exc}")
             paint.paint_error(lcd, ssid, ERROR_AFTER_SECS, retry=True)
             listen_for_retry_click(lcd, keyA, keyB)
-
-
