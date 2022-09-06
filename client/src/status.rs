@@ -134,15 +134,18 @@ impl Status {
 
     pub fn screen_color(&self) -> String {
         match self.availability {
+            // Green
             Availability::Available => "green".into(),
+            // Yeller
             Availability::AvailableIdle => "yellow".into(),
             Availability::Away => "yellow".into(),
             Availability::BeRightBack => "yellow".into(),
+            Availability::Offline => "yellow".into(),
+            Availability::PresenceUnknown => "yellow".into(),
+            // Red
             Availability::Busy => "red".into(),
             Availability::BusyIdle => "red".into(),
             Availability::DoNotDisturb => "red".into(),
-            Availability::Offline => "yellow".into(),
-            Availability::PresenceUnknown => "yellow".into(),
         }
     }
 
@@ -184,7 +187,7 @@ impl Status {
         if self.is_in_meeting() {
             return "  Meeting goes until:".into();
         }
-        format!("  Next Meeting ({}):", self.meeting_start.format("%m/%d"))
+        format!("  Next Event ({}):", self.meeting_start.format("%m/%d"))
     }
 
     fn line6(&self) -> String {
