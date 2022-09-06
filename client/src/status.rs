@@ -43,18 +43,21 @@ pub async fn get_calendar(
     client: &SharedHttpClient,
     token: &SharedAccessToken,
 ) -> Result<CalendarView, Box<dyn std::error::Error>> {
-    let today = Utc::today();
+    let today = Utc::now();
     let soon = today + Duration::days(7);
-
+    let cal_url = format!(
+        "{}?startDateTime={}&endDateTime={}&$select={}&$orderby={}",
+        "https://graph.microsoft.com/v1.0/me/calendarview",
+        today.format("%Y-%m-%dT%H:%M:%S"),
+        soon.format("%Y-%m-%d"),
+        "id,createdDateTime,lastModifiedDateTime,subject,start,end,attendees",
+        "start/dateTime"
+    );
+    println!("{:#?}", cal_url);
     let cal = client
         .get_client()
         .await
-        .get(format!(
-            "{}?startDateTime={}&endDateTime={}&$select=id,createdDateTime,lastModifiedDateTime,subject,start,end,attendees",
-            "https://graph.microsoft.com/v1.0/me/calendarview",
-            today.format("%Y-%m-%d"),
-            soon.format("%Y-%m-%d")
-        ))
+        .get(cal_url)
         .header(
             "Authorization",
             format!("Bearer {}", token.get_access_token()),
@@ -78,7 +81,8 @@ pub struct Status {
 
 impl Status {
     pub fn new(presence: &Presence, calendar: &CalendarView) -> Self {
-        let next_meeting = calendar.value.first();
+        // This assumes that the CalendarView is ordered by start/dateTime
+        let next_meeting = calendar.value.iter().find(|e| e.end > Utc::now());
         Self {
             meeting_attendee_count: next_meeting
                 .map(|mtg| mtg.attendees.len())
@@ -162,7 +166,7 @@ impl Status {
         if self.is_in_meeting() {
             return "  Meeting goes until:".into();
         }
-        "  Next Meeting:".into()
+        format!("  Next Meeting ({}):", self.meeting_start.format("%m/%d"))
     }
 
     fn line6(&self) -> String {
