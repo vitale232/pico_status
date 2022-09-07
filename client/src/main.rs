@@ -11,7 +11,7 @@ mod oauth;
 use oauth::OAuthConfiguration;
 
 mod status;
-use crate::status::{get_status, set_status};
+use crate::status::{debug_status, get_status, set_status};
 
 static CLIENT_ID: &str = dotenv!("CLIENT_ID");
 static TENANT_ID: &str = dotenv!("TENANT_ID");
@@ -50,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "This is the {} err occurrence. Tolerates {}.",
                     err_count, err_tolerance
                 );
+                debug_status(&client, &token).await?;
                 continue;
             }
         };

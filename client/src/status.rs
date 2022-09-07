@@ -21,6 +21,19 @@ pub async fn get_status(
     Ok(status)
 }
 
+pub async fn debug_status(
+    client: &DurableClient,
+    token: &SharedAccessToken,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: Make these simultaneouse to take advantage of the tokio runtime
+    let presence = debug_presence(client, token).await?;
+    println!("{:?}", presence);
+    let calendar = debug_calendar(client, token).await?;
+    println!("{:?}", calendar);
+
+    Ok(())
+}
+
 pub async fn set_status(
     client: &DurableClient,
     status: &Status,
@@ -47,6 +60,51 @@ pub async fn get_presence(
         .json::<Presence>()
         .await?;
     Ok(pres)
+}
+
+pub async fn debug_presence(
+    client: &DurableClient,
+    token: &SharedAccessToken,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let pres = client
+        .get("https://graph.microsoft.com/v1.0/me/presence")
+        .header(
+            "Authorization",
+            format!("Bearer {}", token.get_access_token()),
+        )
+        .send()
+        .await?
+        .text()
+        .await?;
+    Ok(pres)
+}
+
+pub async fn debug_calendar(
+    client: &DurableClient,
+    token: &SharedAccessToken,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let today = Utc::now();
+    let soon = today + Duration::days(7);
+    let cal_url = format!(
+        "{}?startDateTime={}&endDateTime={}&$select={}&$orderby={}",
+        "https://graph.microsoft.com/v1.0/me/calendarview",
+        today.format("%Y-%m-%dT%H:%M:%S"),
+        soon.format("%Y-%m-%d"),
+        "id,createdDateTime,lastModifiedDateTime,subject,start,end,attendees",
+        "start/dateTime"
+    );
+    println!("{:#?}", cal_url);
+    let cal = client
+        .get(cal_url)
+        .header(
+            "Authorization",
+            format!("Bearer {}", token.get_access_token()),
+        )
+        .send()
+        .await?
+        .text()
+        .await?;
+    Ok(cal)
 }
 
 pub async fn get_calendar(
