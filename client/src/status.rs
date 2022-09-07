@@ -79,12 +79,12 @@ pub async fn get_calendar(
 
 #[derive(Clone, Debug)]
 pub struct Status {
-    pub availability: Availability,
-    pub activity: Activity,
-    pub meeting_start: DateTime<Utc>,
-    pub meeting_end: DateTime<Utc>,
-    pub meeting_subject: String,
-    pub meeting_attendee_count: usize,
+    availability: Availability,
+    activity: Activity,
+    event_start: DateTime<Utc>,
+    event_end: DateTime<Utc>,
+    event_subject: String,
+    event_attendee_count: usize,
 }
 
 impl Status {
@@ -92,14 +92,14 @@ impl Status {
         // This assumes that the CalendarView is ordered by start/dateTime
         let next_meeting = calendar.value.iter().find(|e| e.end > Utc::now());
         Self {
-            meeting_attendee_count: next_meeting
+            event_attendee_count: next_meeting
                 .map(|mtg| mtg.attendees.len())
                 .unwrap_or_default(),
             availability: presence.availability.clone(),
             activity: presence.activity.clone(),
-            meeting_start: next_meeting.map(|mtg| mtg.start).unwrap_or_default(),
-            meeting_end: next_meeting.map(|mtg| mtg.end).unwrap_or_default(),
-            meeting_subject: next_meeting
+            event_start: next_meeting.map(|mtg| mtg.start).unwrap_or_default(),
+            event_end: next_meeting.map(|mtg| mtg.end).unwrap_or_default(),
+            event_subject: next_meeting
                 .map(|mtg| mtg.subject.clone())
                 .unwrap_or_default(),
         }
@@ -107,19 +107,20 @@ impl Status {
 
     pub fn uri(&self) -> String {
         format!(
-            "{}?line2={}&line3={}&line5={}&line6=   {}&line7=   {} attendees",
+            "{}?line1={}&line2={}&line3={}&line5={}&line6=   {}&line7=   {} attendees",
             self.screen_color(),
+            self.line1(),
             self.line2(),
             self.line3(),
             self.line5(),
             self.line6(),
-            self.meeting_attendee_count,
+            self.event_attendee_count,
         )
     }
 
     pub fn is_in_meeting(&self) -> bool {
         let now = Utc::now();
-        now > self.meeting_start && now < self.meeting_end
+        now > self.event_start && now < self.event_end
     }
 
     pub fn screen_color(&self) -> String {
@@ -137,6 +138,10 @@ impl Status {
             Availability::BusyIdle => "red".into(),
             Availability::DoNotDisturb => "red".into(),
         }
+    }
+
+    fn line1(&self) -> String {
+        format!("{: >28}", Local::now().format("%I:%M %P"))
     }
 
     fn line2(&self) -> String {
@@ -177,18 +182,18 @@ impl Status {
         if self.is_in_meeting() {
             return "  Meeting goes until:".into();
         }
-        format!("  Next Event ({}):", self.meeting_start.format("%m/%d"))
+        format!("  Next Event ({}):", self.event_start.format("%m/%d"))
     }
 
     fn line6(&self) -> String {
         let time = match self.is_in_meeting() {
-            true => self.meeting_end,
-            false => self.meeting_start,
+            true => self.event_end,
+            false => self.event_start,
         };
         format!(
             "{} ({})",
             time.with_timezone(&Local).format("%I:%M %P"),
-            self.meeting_subject
+            self.event_subject
         )
     }
 }
@@ -201,39 +206,24 @@ pub struct Presence {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct GraphDateTimeZone {
-    #[serde(rename = "dateTime")]
-    pub datetime: String,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct Attendee {
+struct Attendee {
     #[serde(rename = "type")]
-    pub type_: String,
+    pub _type: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct CalendarView {
-    #[serde(rename = "@odata.context")]
-    pub context: String,
     pub value: Vec<Event>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Event {
-    #[serde(rename = "@odata.etag")]
-    pub context: String,
-    pub id: String,
-    #[serde(rename = "createdDateTime")]
-    pub created_datetime: DateTime<Utc>,
-    #[serde(rename = "lastModifiedDateTime")]
-    pub last_modified_datetime: DateTime<Utc>,
-    pub subject: String,
+    subject: String,
     #[serde(deserialize_with = "deser_msgraph_datetimezone_utc")]
-    pub start: DateTime<Utc>,
+    start: DateTime<Utc>,
     #[serde(deserialize_with = "deser_msgraph_datetimezone_utc")]
-    pub end: DateTime<Utc>,
-    pub attendees: Vec<Attendee>,
+    end: DateTime<Utc>,
+    attendees: Vec<Attendee>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

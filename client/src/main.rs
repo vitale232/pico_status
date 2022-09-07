@@ -34,10 +34,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         REFRESH_EXPIRY_PADDING_SECS,
     );
 
+    let err_tolerance = 5;
+    let mut err_count = 0;
     loop {
-        let status = get_status(&client, &token).await?;
+        if err_count > err_tolerance {
+            panic!("Err number {} has occurred! This means the tolerance of {} has been surpased. Exiting!", err_count, err_tolerance);
+        }
 
-        let pires = set_status(&client, &status, PI_IP).await?;
+        let status = match get_status(&client, &token).await {
+            Ok(status) => status,
+            Err(err) => {
+                println!("An error occurred while fetching the status: {:#?}", err);
+                err_count += 1;
+                println!(
+                    "This is the {} err occurrence. Tolerates {}.",
+                    err_count, err_tolerance
+                );
+                continue;
+            }
+        };
+
+        let pires = match set_status(&client, &status, PI_IP).await {
+            Ok(res) => res,
+            Err(err) => {
+                println!("An error occurred while fetching the status: {:#?}", err);
+                err_count += 1;
+                println!(
+                    "This is the {} err occurrence. Tolerates {}.",
+                    err_count, err_tolerance
+                );
+                continue;
+            }
+        };
         println!("Pi Response: {:#?}", pires);
 
         println!("Sleeping for {} seconds...", POLL_AFTER_SECS);
