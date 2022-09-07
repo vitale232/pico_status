@@ -145,7 +145,7 @@ Cache-Control: no-cache
 Server: pi-in-the-sky
 Content-Type: text/html
 
-<!DOCTYPE html><html> <a href="/green">Green</a><br /> <br /><a href="/yellow">Yellow</a><br /> <br /><a href="/red">Red</a><p>Screen is {state}</p></body></html>
+<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8' /><meta http-equiv='X-UA-Compatible' content='IE=edge' /><meta name='viewport' content='width=device-width, initial-scale=1.0' /><title>Pico Status</title></head><body><a href='/green'>Green</a><br /><br /><a href='/yellow'>Yellow</a><br /><br /><a href='/red'>Red</a><p>Screen is {state}</p></body></html>
 """
 
 def render404():
@@ -154,6 +154,8 @@ HTTP/1.1 404 Not Found
 Cache-Control: no-cache
 Server: pi-in-the-sky
 Content-Type: text/html
+
+<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8' /><meta http-equiv='X-UA-Compatible' content='IE=edge' /><meta name='viewport' content='width=device-width, initial-scale=1.0' /><title>Pico Status</title></head><body><h1>Not Found</h1><p>The URL you submitted does not exist on da lil server.</p></body></html>
 """
 
 def is_supported_url(request):
