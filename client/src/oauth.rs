@@ -211,27 +211,6 @@ impl Config {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct AccessTokenRequestBody {
-    client_id: String,
-    redirect_uri: String,
-    code: String,
-    grant_type: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct RefreshTokenRequestBody {
-    client_id: String,
-    grant_type: String,
-    scope: String,
-    refresh_token: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct AccessCode {
-    pub code: String,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AccessToken {
     token_type: String,
@@ -262,9 +241,9 @@ impl SharedAccessToken {
         pad_secs: u64,
     ) {
         tokio::spawn(async move {
-            let wait_time = token.get_expires_in() - pad_secs;
-            println!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
             loop {
+                let wait_time = token.get_expires_in() - pad_secs;
+                println!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
                 println!("Refresh sleeping {} seconds...", wait_time);
                 tokio::time::sleep(Duration::from_secs(wait_time)).await;
                 Self::do_refresh(client.clone(), &token, &config)
@@ -316,4 +295,24 @@ impl SharedAccessToken {
         let token = self.data.lock().unwrap();
         token.access_token.clone()
     }
+}
+#[derive(Debug, Deserialize, Serialize)]
+struct AccessTokenRequestBody {
+    client_id: String,
+    redirect_uri: String,
+    code: String,
+    grant_type: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct RefreshTokenRequestBody {
+    client_id: String,
+    grant_type: String,
+    scope: String,
+    refresh_token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct AccessCode {
+    pub code: String,
 }
