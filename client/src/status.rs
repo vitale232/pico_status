@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime, Utc};
+use futures::future;
 use serde::{de, Deserialize, Deserializer};
 
 use crate::http::DurableClient;
@@ -10,36 +11,48 @@ pub async fn get_status(
     client: &DurableClient,
     token: &SharedAccessToken,
 ) -> Result<Status, Box<dyn std::error::Error>> {
-    // TODO: Make these simultaneouse to take advantage of the tokio runtime
-    let presence = get_presence(client, token).await?;
-    let calendar = get_calendar(client, token).await?;
+    let (pres_result, cal_result) =
+        future::join(get_presence(client, token), get_calendar(client, token)).await;
+
+    let presence = match pres_result {
+        Ok(pres) => pres,
+        Err(err) => return Err(err),
+    };
+    let calendar = match cal_result {
+        Ok(cal) => cal,
+        Err(err) => return Err(err),
+    };
 
     let status = Status::new(&presence, &calendar);
     Ok(status)
 }
 
-pub async fn debug_status(
+pub async fn get_calendar(
     client: &DurableClient,
     token: &SharedAccessToken,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: Make these simultaneouse to take advantage of the tokio runtime
-    let presence = debug_presence(client, token).await?;
-    println!("{:?}", presence);
-    let calendar = debug_calendar(client, token).await?;
-    println!("{:?}", calendar);
-
-    Ok(())
-}
-
-pub async fn set_status(
-    client: &DurableClient,
-    status: &Status,
-    pi_ip_addr: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let pico_url = format!("http://{}/{}", pi_ip_addr, status.uri());
-    println!("pico_url={}", pico_url);
-    let pires = client.get(pico_url).send().await?.text().await?;
-    Ok(pires)
+) -> Result<CalendarView, Box<dyn std::error::Error>> {
+    let today = Utc::now();
+    let soon = today + Duration::days(7);
+    let cal_url = format!(
+        "{}?startDateTime={}&endDateTime={}&$select={}&$orderby={}",
+        "https://graph.microsoft.com/v1.0/me/calendarview",
+        today.format("%Y-%m-%dT%H:%M:%S"),
+        soon.format("%Y-%m-%d"),
+        "id,createdDateTime,lastModifiedDateTime,subject,start,end,attendees",
+        "start/dateTime"
+    );
+    println!("{:#?}", cal_url);
+    let cal = client
+        .get(cal_url)
+        .header(
+            "Authorization",
+            format!("Bearer {}", token.get_access_token()),
+        )
+        .send()
+        .await?
+        .json::<CalendarView>()
+        .await?;
+    Ok(cal)
 }
 
 pub async fn get_presence(
@@ -57,6 +70,30 @@ pub async fn get_presence(
         .json::<Presence>()
         .await?;
     Ok(pres)
+}
+
+pub async fn set_status(
+    client: &DurableClient,
+    status: &Status,
+    pi_ip_addr: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let pico_url = format!("http://{}/{}", pi_ip_addr, status.uri());
+    println!("pico_url={}", pico_url);
+    let pires = client.get(pico_url).send().await?.text().await?;
+    Ok(pires)
+}
+
+pub async fn debug_status(
+    client: &DurableClient,
+    token: &SharedAccessToken,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: Make these simultaneouse to take advantage of the tokio runtime
+    let presence = debug_presence(client, token).await?;
+    println!("{:?}", presence);
+    let calendar = debug_calendar(client, token).await?;
+    println!("{:?}", calendar);
+
+    Ok(())
 }
 
 pub async fn debug_presence(
@@ -100,34 +137,6 @@ pub async fn debug_calendar(
         .send()
         .await?
         .text()
-        .await?;
-    Ok(cal)
-}
-
-pub async fn get_calendar(
-    client: &DurableClient,
-    token: &SharedAccessToken,
-) -> Result<CalendarView, Box<dyn std::error::Error>> {
-    let today = Utc::now();
-    let soon = today + Duration::days(7);
-    let cal_url = format!(
-        "{}?startDateTime={}&endDateTime={}&$select={}&$orderby={}",
-        "https://graph.microsoft.com/v1.0/me/calendarview",
-        today.format("%Y-%m-%dT%H:%M:%S"),
-        soon.format("%Y-%m-%d"),
-        "id,createdDateTime,lastModifiedDateTime,subject,start,end,attendees",
-        "start/dateTime"
-    );
-    println!("{:#?}", cal_url);
-    let cal = client
-        .get(cal_url)
-        .header(
-            "Authorization",
-            format!("Bearer {}", token.get_access_token()),
-        )
-        .send()
-        .await?
-        .json::<CalendarView>()
         .await?;
     Ok(cal)
 }
