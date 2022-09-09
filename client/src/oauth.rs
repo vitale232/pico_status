@@ -16,8 +16,8 @@ pub async fn flow(
         .and(warp::path("redirect"))
         .and(with_config(config.clone()))
         .and(warp::query::<AccessCode>())
-        .map(|c: OAuthConfiguration, ac: AccessCode| {
-            c.set_access_code(&ac.code);
+        .map(|config: OAuthConfiguration, access: AccessCode| {
+            config.set_access_code(&access.code);
             warp::reply::html(format!(
                 r#"
                     <!DOCTYPE html>
@@ -38,7 +38,7 @@ pub async fn flow(
                       </script>
                     </html>
                     "#,
-                ac.code,
+                access.code,
                 WAIT_FOR_SECS * 1_000 + 1_000
             ))
         });

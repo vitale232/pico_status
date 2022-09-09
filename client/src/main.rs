@@ -54,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
+        println!("Current Status: {:?}", status);
 
         let pires = match set_status(&client, &status, PI_IP).await {
             Ok(res) => res,
