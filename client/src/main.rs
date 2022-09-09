@@ -1,17 +1,14 @@
+mod http;
+mod oauth;
+mod status;
+
+use oauth::OAuthConfiguration;
+use tokio::time::Duration;
+
 #[macro_use]
 extern crate dotenv_codegen;
 #[macro_use]
 extern crate serde;
-
-use tokio::time::Duration;
-
-mod http;
-
-mod oauth;
-use oauth::OAuthConfiguration;
-
-mod status;
-use crate::status::{debug_status, get_status, set_status};
 
 static CLIENT_ID: &str = dotenv!("CLIENT_ID");
 static TENANT_ID: &str = dotenv!("TENANT_ID");
@@ -41,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             panic!("Err number {} has occurred! This means the tolerance of {} has been surpased. Exiting!", err_count, err_tolerance);
         }
 
-        let status = match get_status(&client, &token).await {
+        let status = match status::get_status(&client, &token).await {
             Ok(status) => status,
             Err(err) => {
                 println!("An error occurred while fetching the status: {:#?}", err);
@@ -50,13 +47,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "This is the {} err occurrence. Tolerates {}.",
                     err_count, err_tolerance
                 );
-                debug_status(&client, &token).await?;
+                status::debug_status(&client, &token).await?;
                 continue;
             }
         };
         println!("Current Status: {:?}", status);
 
-        let pires = match set_status(&client, &status, PI_IP).await {
+        let pires = match status::set_status(&client, &status, PI_IP).await {
             Ok(res) => res,
             Err(err) => {
                 println!("An error occurred while fetching the status: {:#?}", err);
