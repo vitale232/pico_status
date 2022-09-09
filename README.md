@@ -15,10 +15,15 @@ When a request is successfully processed, the Pico will paint the
 [Waveshare Pico LDC 1.14](https://www.waveshare.com/wiki/Pico-LCD-1.14)
 with the appropriate color.
 
-Currently, the server supports two query params.
+Currently, the server supports seven query params.
 
-- `top_text`: A line of text that will be displayed on the top of the monitor
-- `bottom_text`: A line of text that will be displayed directly below `top_text`
+- `line1`: A line of text that will be displayed on the first line of the LCD
+- `line2`: A line of text that will be displayed on the second line of the LCD
+- `line3`: A line of text that will be displayed on the third line of the LCD
+- `line4`: A line of text that will be displayed on the fourth line of the LCD
+- `line5`: A line of text that will be displayed on the fifth line of the LCD
+- `line6`: A line of text that will be displayed on the sixth line of the LCD
+- `line7`: A line of text that will be displayed on the seventh line of the LCD
 
 ## Usage
 
@@ -42,20 +47,50 @@ from the CLI.
 ### Example CLI Usage
 
 Currently, I can't get this to work with curl, which seems quite odd. Whatevs.
-Let's use wget. Here's a sample request to paint the screen red with a celebratory
+Let's use wget. Here's a sample request to paint the screen green with a celebratory
 message:
 
 ```shell
-wget -O - "http://192.168.1.122/green?top_text=Fresh baked&bottom_text=   Rasberry Pi!"
+wget -O - "http://xxx.xxx.x.xxx/red?line1=                    08:00 am&line2= Busy&line3= (Busy)&line5= Meeting goes until:&line6=  08:30 am (Demo Meeting)&line7=  1 attendees"
 ```
 
-![a raspberry pi pico w connected to a Pico LCD 1.14 displaying the text "Fesh baked Raspberry Pi!"](./assets/example.PNG "Raspberry Pi Web Server")
+![a raspberry pi pico w connected to a Pico LCD 1.14 displaying a status indicating the logged in usr is in a meeting](./assets/in_meeting.png "Raspberry Pi Web Server")
 
-## Future Work
+## Automated Client for Microsoft Teams/Outlook users
 
-I'm awaiting approval to OAuth against my microsoft account. Next will be to build
-a client that can run on your work computer in the background. It will connect
-to the MS Graph API to get your
-[`/presence`](https://docs.microsoft.com/en-us/graph/api/presence-get?view=graph-rest-1.0&tabs=http),
-and push periodic updates to the Pico Server.
+A client application has been created to integrate the pico w and its LCD
+with MS Teams and outlook. The app requires that you configure an OAuth application
+in the Azure Portal for your work or school managed account. Once that is setup,
+you'll need to store some key variables from your configuration in the `.env`
+file within the root of the client directory. This file does not exist, so create
+it:
+
+```shell
+touch client/.env
+
+# CLIENT_ID=
+# CLIENT_SECRET=
+# TENANT_ID=
+# PI_IP=
+```
+
+Once the app is configured with permissions to view your Presence and Calendar,
+you should be able to build it with Rust's package
+management tooling, called Cargo. The repository is setup to compile
+to the host system's architecture by default, assuming Ubuntu. There is also a linker
+configured for cross copmilation from GNU to Windows. If you intend to cross
+compile, you'll need to install the linker on the host system.
+
+Once build, run the app from the command line. It should pop open a browser
+that prompts you to login to your new OAuth app with your MS account. Approve
+and login, which will send an Accesss Code back to the client app, which
+will be running a warp server to support transferring the access code from
+MS's infrastructure into the app. Once the access_code is received, the warp
+server will be killed.
+
+From there, the client app takes over. It will fetch your Presence and
+CalendarView from the MS Graph API, interpret the results into a text based summary,
+and make an HTTP requst to the Pi's IP. If the pi server is running,
+it should update the LCD! There are some constant variables in the app that control
+the frequency of updates, which will likely be migrated to a clap-based CLI.
 

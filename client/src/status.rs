@@ -12,12 +12,9 @@ pub async fn get_status(
 ) -> Result<Status, Box<dyn std::error::Error>> {
     // TODO: Make these simultaneouse to take advantage of the tokio runtime
     let presence = get_presence(client, token).await?;
-    println!("{:?}", presence);
     let calendar = get_calendar(client, token).await?;
-    println!("{:?}", calendar);
 
     let status = Status::new(&presence, &calendar);
-    println!("{:?}", status);
     Ok(status)
 }
 
@@ -165,14 +162,14 @@ impl Status {
 
     pub fn uri(&self) -> String {
         format!(
-            "{}?line1={}&line2={}&line3={}&line5={}&line6=   {}&line7=   {} attendees",
+            "{}?line1={}&line2={}&line3={}&line5={}&line6={}&line7={}",
             self.screen_color(),
             self.line1(),
             self.line2(),
             self.line3(),
             self.line5(),
             self.line6(),
-            self.event_attendee_count,
+            self.line7(),
         )
     }
 
@@ -199,48 +196,52 @@ impl Status {
     }
 
     fn line1(&self) -> String {
-        format!("{: >28}", Local::now().format("%I:%M %P"))
+        format!("{:>28}", Local::now().format("%I:%M %P"))
     }
 
     fn line2(&self) -> String {
-        match self.availability {
-            Availability::Available => "  Availability: Available".into(),
-            Availability::AvailableIdle => "  Availability: Available (Idle)".into(),
-            Availability::Away => "  Availability: Away from Computer".into(),
-            Availability::BeRightBack => "  Availability: Be Right Back".into(),
-            Availability::Busy => "  Availability: Busy".into(),
-            Availability::BusyIdle => "  Availability: Busy (Idle)".into(),
-            Availability::DoNotDisturb => "  Availability: Do Not Disturb".into(),
-            Availability::Offline => "  Availability: Offline".into(),
-            Availability::PresenceUnknown => "  Availability: Dono".into(),
-        }
+        let value = match self.availability {
+            Availability::Available => "Available",
+            Availability::AvailableIdle => "Available (Idle)",
+            Availability::Away => "Away from Computer",
+            Availability::BeRightBack => "Be Right Back",
+            Availability::Busy => "Busy",
+            Availability::BusyIdle => "Busy (Idle)",
+            Availability::DoNotDisturb => "Do Not Disturb",
+            Availability::Offline => "Offline",
+            Availability::PresenceUnknown => "Dono",
+        };
+        format!(" {}", value)
     }
 
     fn line3(&self) -> String {
-        match self.activity {
-            Activity::Available => "  Activity: Available".into(),
-            Activity::Away => "  Activity: Away".into(),
-            Activity::BeRightBack => "  Activity: Be Right Back".into(),
-            Activity::Busy => "  Activity: Busy".into(),
-            Activity::DoNotDisturb => "  Activity: Do Not Disturb".into(),
-            Activity::InACall => "  Activity: In a Call".into(),
-            Activity::InAConferenceCall => "  Activity: In a Conference Call".into(),
-            Activity::Inactive => "  Activity: Inactive".into(),
-            Activity::InAMeeting => "  Activity: In a Meeting".into(),
-            Activity::Offline => "  Activity: Offline".into(),
-            Activity::OffWork => "  Activity: Off Work!".into(),
-            Activity::OutOfOffice => "  Activity: Out of Office!".into(),
-            Activity::PresenceUnknown => "  Activity: Presence Unknown ??".into(),
-            Activity::Presenting => "  Activity: Presenting".into(),
-            Activity::UrgentInterruptionsOnly => "  Activity: Urgent Interruptions ONLY".into(),
-        }
+        let value = match self.activity {
+            Activity::Available => "(Available)",
+            Activity::Away => "(Away)",
+            Activity::BeRightBack => "(Be Right Back)",
+            Activity::Busy => "(Busy)",
+            Activity::DoNotDisturb => "(Do Not Disturb)",
+            Activity::InACall => "(In a Call)",
+            Activity::InAConferenceCall => "(In a Conference Call)",
+            Activity::Inactive => "(Inactive)",
+            Activity::InAMeeting => "(In a Meeting)",
+            Activity::Offline => "(Offline)",
+            Activity::OffWork => "(Off Work!)",
+            Activity::OutOfOffice => "(Out of Office!)",
+            Activity::PresenceUnknown => "(Presence Unknown ??)",
+            Activity::Presenting => "(Presenting)",
+            Activity::UrgentInterruptionsOnly => "(Urgent Interruptions ONLY)",
+        };
+        format!(" {}", value)
     }
 
     fn line5(&self) -> String {
-        if self.is_in_meeting() {
-            return "  Meeting goes until:".into();
-        }
-        format!("  Next Event ({}):", self.event_start.format("%m/%d"))
+        let value: String = if self.is_in_meeting() {
+            "Meeting goes until:".into()
+        } else {
+            format!("Next Event ({}):", self.event_start.format("%m/%d"))
+        };
+        format!(" {}", value)
     }
 
     fn line6(&self) -> String {
@@ -249,10 +250,14 @@ impl Status {
             false => self.event_start,
         };
         format!(
-            "{} ({})",
+            "  {} ({})",
             time.with_timezone(&Local).format("%I:%M %P"),
             self.event_subject
         )
+    }
+
+    fn line7(&self) -> String {
+        format!("  {} attendees", self.event_attendee_count)
     }
 }
 
