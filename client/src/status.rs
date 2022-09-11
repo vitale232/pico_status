@@ -384,3 +384,75 @@ impl Display for Activity {
         write!(f, "{}", val)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_uri_availabile_future_event() {
+        let presence = build_presence(Availability::Available, Activity::Available);
+        let (future_event, next_start, _) = build_future_cal_event("Test One");
+        let calendar = CalendarView {
+            value: vec![future_event.clone()],
+        };
+
+        let status = Status::new(&presence, &calendar);
+        println!("{:?}", status.uri());
+        assert!(!status.is_in_meeting());
+        assert_eq!(
+            status.uri(),
+            format!(
+                "{}?line1={:>28}&line2= {}&line3= ({})&line5= Next Event ({}):&line6=  {} ({})&line7=  {} attendees",
+                "green",
+                Local::now().format("%I:%M %P"),
+                "Available",
+                "Available",
+                next_start.format("%m/%d"),
+                next_start.format("%I:%M %P"),
+                future_event.subject,
+                future_event.attendees.len()
+           )
+        );
+    }
+
+    fn build_presence(availability: Availability, activity: Activity) -> Presence {
+        Presence {
+            id: String::from("id123"),
+            availability,
+            activity,
+        }
+    }
+
+    fn build_future_cal_event(subject: &str) -> (Event, DateTime<Local>, DateTime<Local>) {
+        let now = Utc::now();
+        let start = now + Duration::hours(1);
+        let end = start + Duration::hours(1);
+        (
+            Event {
+                subject: subject.into(),
+                start,
+                end,
+                attendees: vec![Attendee {
+                    _type: String::from("who cares"),
+                }],
+            },
+            DateTime::from(start),
+            DateTime::from(end),
+        )
+    }
+
+    fn build_current_cal_event(subject: &str) -> Event {
+        let now = Utc::now();
+        let start = now - Duration::minutes(10);
+        let end = start + Duration::hours(1);
+        Event {
+            subject: subject.into(),
+            start,
+            end,
+            attendees: vec![Attendee {
+                _type: String::from("who cares"),
+            }],
+        }
+    }
+}
