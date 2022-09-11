@@ -387,6 +387,8 @@ impl Display for Activity {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
 
     #[test]
@@ -412,6 +414,32 @@ mod tests {
                 next_start.format("%I:%M %P"),
                 future_event.subject,
                 future_event.attendees.len()
+           )
+        );
+    }
+
+    #[test]
+    fn test_uri_curr_event() {
+        let presence = build_presence(Availability::Busy, Activity::InACall);
+        let (event, _, end) = build_current_cal_event("Current Events");
+        let cal = CalendarView {
+            value: vec![event.clone()],
+        };
+
+        let status = Status::new(&presence, &cal);
+        println!("{:?}", status.uri());
+        assert!(status.is_in_meeting());
+        assert_eq!(
+            status.uri(),
+            format!(
+                "{}?line1={:>28}&line2= {}&line3= ({})&line5= Meeting goes until:&line6=  {} ({})&line7=  {} attendees",
+                "red",
+                Local::now().format("%I:%M %P"),
+                "Busy",
+                "In a Call",
+                end.format("%I:%M %P"),
+                event.subject,
+                event.attendees.len()
            )
         );
     }
@@ -442,17 +470,21 @@ mod tests {
         )
     }
 
-    fn build_current_cal_event(subject: &str) -> Event {
+    fn build_current_cal_event(subject: &str) -> (Event, DateTime<Local>, DateTime<Local>) {
         let now = Utc::now();
         let start = now - Duration::minutes(10);
         let end = start + Duration::hours(1);
-        Event {
-            subject: subject.into(),
-            start,
-            end,
-            attendees: vec![Attendee {
-                _type: String::from("who cares"),
-            }],
-        }
+        (
+            Event {
+                subject: subject.into(),
+                start,
+                end,
+                attendees: vec![Attendee {
+                    _type: String::from("who cares"),
+                }],
+            },
+            DateTime::from(start),
+            DateTime::from(end),
+        )
     }
 }
