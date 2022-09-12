@@ -1,3 +1,4 @@
+use core::fmt;
 use std::sync::{Arc, Mutex};
 
 use tokio::{sync::oneshot, time::Duration};
@@ -212,7 +213,7 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct AccessToken {
     token_type: String,
     scope: String,
@@ -220,6 +221,19 @@ pub struct AccessToken {
     ext_expires_in: u64,
     pub access_token: String,
     refresh_token: String,
+}
+
+impl fmt::Debug for AccessToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AccessToken")
+            .field("token_type", &self.token_type)
+            .field("scope", &self.scope)
+            .field("expires_in", &self.expires_in)
+            .field("ext_expires_in", &self.ext_expires_in)
+            .field("refresh_token", &"[REDACTED]")
+            .field("acess_token", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug)]
