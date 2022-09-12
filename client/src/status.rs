@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime, Utc};
 use futures::future;
@@ -87,7 +87,6 @@ pub async fn debug_status(
     client: &DurableClient,
     token: &SharedAccessToken,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: Make these simultaneouse to take advantage of the tokio runtime
     let presence = debug_presence(client, token).await?;
     println!("{:?}", presence);
     let calendar = debug_calendar(client, token).await?;
@@ -187,8 +186,15 @@ impl Status {
         now > self.event_start && now < self.event_end
     }
 
+    pub fn is_late(&self) -> bool {
+        if !self.is_in_meeting() {
+            return false;
+        }
+        matches!(self.availability, Availability::Away)
+    }
+
     pub fn screen_color(&self) -> String {
-        match self.availability {
+        let color = match self.availability {
             // Green
             Availability::Available => "green".into(),
             // Yeller
@@ -201,6 +207,11 @@ impl Status {
             Availability::Busy => "red".into(),
             Availability::BusyIdle => "red".into(),
             Availability::DoNotDisturb => "red".into(),
+        };
+        if self.is_late() {
+            "late".into()
+        } else {
+            color
         }
     }
 
@@ -311,23 +322,6 @@ pub enum Availability {
     PresenceUnknown,
 }
 
-impl Display for Availability {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let val = match self {
-            Availability::Available => "Available",
-            Availability::AvailableIdle => "AvailableIdle",
-            Availability::Away => "Away",
-            Availability::BeRightBack => "BeRightBack",
-            Availability::Busy => "Busy",
-            Availability::BusyIdle => "BusyIdle",
-            Availability::DoNotDisturb => "DoNotDisturb",
-            Availability::Offline => "Offline",
-            Availability::PresenceUnknown => "PresenceUnknown",
-        };
-        write!(f, "{}", val)
-    }
-}
-
 fn deser_msgraph_datetimezone_utc<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
 where
     D: Deserializer<'de>,
@@ -362,29 +356,6 @@ pub enum Activity {
     UrgentInterruptionsOnly,
 }
 
-impl Display for Activity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let val = match self {
-            Activity::Available => "Available",
-            Activity::Away => "Away",
-            Activity::BeRightBack => "BeRightBack",
-            Activity::Busy => "Busy",
-            Activity::DoNotDisturb => "DotNotDisturb",
-            Activity::InACall => "InACall",
-            Activity::InAConferenceCall => "InAConferenceCall",
-            Activity::Inactive => "Inactive",
-            Activity::InAMeeting => "InAMeeting",
-            Activity::Offline => "Offline",
-            Activity::OffWork => "OffWork",
-            Activity::OutOfOffice => "OutOfOffice",
-            Activity::PresenceUnknown => "PresenceUnknown",
-            Activity::Presenting => "Presenting",
-            Activity::UrgentInterruptionsOnly => "UrgentInterruptionsOnly",
-        };
-        write!(f, "{}", val)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::vec;
@@ -401,6 +372,7 @@ mod tests {
 
         let status = Status::new(&presence, &calendar);
         println!("{:?}", status.uri());
+
         assert!(!status.is_in_meeting());
         assert_eq!(
             status.uri(),
@@ -419,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn test_uri_curr_event() {
+    fn test_uri_busy_curr_event() {
         let presence = build_presence(Availability::Busy, Activity::InACall);
         let (event, _, end) = build_current_cal_event("Current Events");
         let cal = CalendarView {
@@ -429,6 +401,7 @@ mod tests {
         let status = Status::new(&presence, &cal);
         println!("{:?}", status.uri());
         assert!(status.is_in_meeting());
+
         assert_eq!(
             status.uri(),
             format!(
@@ -437,6 +410,34 @@ mod tests {
                 Local::now().format("%I:%M %P"),
                 "Busy",
                 "In a Call",
+                end.format("%I:%M %P"),
+                event.subject,
+                event.attendees.len()
+           )
+        );
+    }
+
+    #[test]
+    fn test_uri_late_for_event() {
+        let presence = build_presence(Availability::Away, Activity::Away);
+        let (event, _, end) = build_current_cal_event("Current Events");
+        let cal = CalendarView {
+            value: vec![event.clone()],
+        };
+
+        let status = Status::new(&presence, &cal);
+        println!("{:?}", status.uri());
+        assert!(status.is_in_meeting());
+        assert!(status.is_late());
+
+        assert_eq!(
+            status.uri(),
+            format!(
+                "{}?line1={:>28}&line2= {}&line3= ({})&line5= Meeting goes until:&line6=  {} ({})&line7=  {} attendees",
+                "late",
+                Local::now().format("%I:%M %P"),
+                "Away from Computer",
+                "Away",
                 end.format("%I:%M %P"),
                 event.subject,
                 event.attendees.len()
