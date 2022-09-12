@@ -5,11 +5,12 @@ project. The concept is that the Rasp Pi microcontroller will act as a server
 over the local Wifi network. The server is currently implemented in micropython,
 but obv it's gotta be Rust one day.
 
-The server accepts TCP requests over port 80 at three routes:
+The server accepts TCP requests over port 80 at four routes:
 
-- `/green`
-- `/yellow`
-- `/red`
+- `/green`: Lights up display as green with black text
+- `/yellow`: Lights up display as yellow with black text
+- `/red`: Lights up display as red with white text
+- `/late`: Lights up display as 🍆eggplant🍆 with white text
 
 When a request is successfully processed, the Pico will paint the
 [Waveshare Pico LDC 1.14](https://www.waveshare.com/wiki/Pico-LCD-1.14)
