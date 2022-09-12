@@ -16,6 +16,7 @@ colors = {
     "orange": color(204, 132, 0),
     "purple": color(111, 0, 255),
     "pink": color(254, 221, 228),
+    "dark_red": color(120, 0, 33),
 }
 
 
@@ -77,6 +78,9 @@ def paint_status(
     elif color_state == "RED":
         lcd.fill(colors["red"])
         text_color = colors["white"]
+    elif color_state == "DARK_RED":
+        lcd.fill(colors["dark_red"])
+        text_color = colors["white"]
     else:
         lcd.fill(colors["pink"])
         text_color = colors["black"]
@@ -97,4 +101,4 @@ def paint_status(
         lcd.text(trim(line7), 2, 120, text_color)
 
     lcd.show()
-    return
+    return color_state
