@@ -7,6 +7,7 @@ use serde::{de, Deserialize, Deserializer};
 use crate::http::DurableClient;
 use crate::oauth::SharedAccessToken;
 
+#[tracing::instrument]
 pub async fn get_status(
     client: &DurableClient,
     token: &SharedAccessToken,
@@ -24,9 +25,11 @@ pub async fn get_status(
     };
 
     let status = Status::new(&presence, &calendar);
+    tracing::info!("Status: {:#?}", status);
     Ok(status)
 }
 
+#[tracing::instrument]
 pub async fn get_calendar(
     client: &DurableClient,
     token: &SharedAccessToken,
@@ -41,7 +44,7 @@ pub async fn get_calendar(
         "id,createdDateTime,lastModifiedDateTime,subject,start,end,attendees",
         "start/dateTime"
     );
-    println!("{:#?}", cal_url);
+    tracing::info!("Calendar URL: {:#?}", cal_url);
     let cal = client
         .get(cal_url)
         .header(
@@ -52,9 +55,11 @@ pub async fn get_calendar(
         .await?
         .json::<CalendarView>()
         .await?;
+    tracing::trace!("Calendar response: {:?}", cal);
     Ok(cal)
 }
 
+#[tracing::instrument]
 pub async fn get_presence(
     client: &DurableClient,
     token: &SharedAccessToken,
@@ -69,32 +74,37 @@ pub async fn get_presence(
         .await?
         .json::<Presence>()
         .await?;
+    tracing::trace!("Presence Response: {:#?}", pres);
     Ok(pres)
 }
 
+#[tracing::instrument]
 pub async fn set_status(
     client: &DurableClient,
     status: &Status,
     pi_ip_addr: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let pico_url = format!("http://{}/{}", pi_ip_addr, status.uri());
-    println!("pico_url={}", pico_url);
+    tracing::info!("Pi URL {:#?}", pico_url);
     let pires = client.get(pico_url).send().await?.text().await?;
+    tracing::info!("Pi Response {:#?}", pires);
     Ok(pires)
 }
 
+#[tracing::instrument]
 pub async fn debug_status(
     client: &DurableClient,
     token: &SharedAccessToken,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::trace!("Debugging status GETs");
     let presence = debug_presence(client, token).await?;
-    println!("{:?}", presence);
+    tracing::trace!("Presence: {:?}", presence);
     let calendar = debug_calendar(client, token).await?;
-    println!("{:?}", calendar);
-
+    tracing::trace!("Calendar: {:?}", calendar);
     Ok(())
 }
 
+#[tracing::instrument]
 pub async fn debug_presence(
     client: &DurableClient,
     token: &SharedAccessToken,
@@ -109,9 +119,11 @@ pub async fn debug_presence(
         .await?
         .text()
         .await?;
+    tracing::info!("Presence as text: {:#?}", pres);
     Ok(pres)
 }
 
+#[tracing::instrument]
 pub async fn debug_calendar(
     client: &DurableClient,
     token: &SharedAccessToken,
@@ -126,7 +138,7 @@ pub async fn debug_calendar(
         "id,createdDateTime,lastModifiedDateTime,subject,start,end,attendees",
         "start/dateTime"
     );
-    println!("{:#?}", cal_url);
+    tracing::trace!("Calendar URL: {:?}", cal_url);
     let cal = client
         .get(cal_url)
         .header(
@@ -137,6 +149,7 @@ pub async fn debug_calendar(
         .await?
         .text()
         .await?;
+    tracing::info!("Calendar as text: {:#?}", cal);
     Ok(cal)
 }
 

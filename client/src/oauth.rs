@@ -7,6 +7,7 @@ use crate::http::DurableClient;
 
 const WAIT_FOR_SECS: u64 = 3;
 
+#[tracing::instrument]
 pub async fn flow(
     config: OAuthConfiguration,
     client: &DurableClient,
@@ -50,16 +51,16 @@ pub async fn flow(
     let (_, server) = warp::serve(access_code_filter).bind_with_graceful_shutdown(
         ([127, 0, 0, 1], port),
         async move {
-            println!("waiting for signal");
+            tracing::info!("waiting for signal");
             killrx.await.expect("Error handling shutdown receiver");
-            println!("got signal");
+            tracing::info!("got signal");
         },
     );
     tokio::spawn(async {
-        println!("{} seconds to go...", WAIT_FOR_SECS);
+        tracing::info!("{} seconds to go...", WAIT_FOR_SECS);
         tokio::time::sleep(tokio::time::Duration::from_secs(WAIT_FOR_SECS)).await;
         killtx.send(1).expect("Could not send kill signal!");
-        println!("Graceful killshot transmitted")
+        tracing::info!("Graceful killshot transmitted")
     });
     tokio::task::spawn(server).await?;
 
@@ -73,7 +74,7 @@ pub async fn flow(
         .json::<AccessToken>()
         .await?;
 
-    println!("T: {:#?}", token);
+    tracing::info!("T: {:#?}", token);
     Ok(SharedAccessToken::new(token))
 }
 
@@ -83,7 +84,7 @@ fn with_config(
     warp::any().map(move || config.clone())
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OAuthConfiguration {
     data: Arc<Mutex<Config>>,
 }
@@ -233,6 +234,7 @@ impl SharedAccessToken {
         }
     }
 
+    #[tracing::instrument]
     pub fn autorefresh(
         &self,
         client: DurableClient,
@@ -243,8 +245,8 @@ impl SharedAccessToken {
         tokio::spawn(async move {
             loop {
                 let wait_time = token.get_expires_in() - pad_secs;
-                println!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
-                println!("Refresh sleeping {} seconds...", wait_time);
+                tracing::info!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
+                tracing::info!("Refresh sleeping {} seconds...", wait_time);
                 tokio::time::sleep(Duration::from_secs(wait_time)).await;
                 Self::do_refresh(client.clone(), &token, &config)
                     .await
@@ -253,6 +255,7 @@ impl SharedAccessToken {
         });
     }
 
+    #[tracing::instrument]
     async fn do_refresh(
         client: DurableClient,
         token: &SharedAccessToken,
@@ -267,7 +270,7 @@ impl SharedAccessToken {
             .await?
             .json::<AccessToken>()
             .await?;
-        println!("Refresh response: {:#?}", res);
+        tracing::info!("Refresh response: {:#?}", res);
         token.apply_refresh(res);
         Ok(())
     }
