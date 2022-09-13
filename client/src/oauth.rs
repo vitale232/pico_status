@@ -22,24 +22,24 @@ pub async fn flow(
             config.set_access_code(&access.code);
             warp::reply::html(format!(
                 r#"
-                    <!DOCTYPE html>
-                    <html lang='en'>
-                      <head>
-                        <meta charset='UTF-8' />
-                        <meta http-equiv='X-UA-Compatible' content='IE=edge' />
-                        <meta name='viewport' content='device-width' />
-                        <title>Warp OAuth</title>
-                      </head>
-                      <body>
-                        <h1>Access Code</h1>
-                        <p>Access code recieved!</p>
-                        <code>{}</code>
-                      </body>
-                      <script>
-                        setTimeout(() => window.location.reload(), {})
-                      </script>
-                    </html>
-                    "#,
+                <!DOCTYPE html>
+                <html lang='en'>
+                  <head>
+                    <meta charset='UTF-8' />
+                    <meta http-equiv='X-UA-Compatible' content='IE=edge' />
+                    <meta name='viewport' content='device-width' />
+                    <title>Warp OAuth</title>
+                  </head>
+                  <body>
+                    <h1>Access Code</h1>
+                    <p>Access code recieved!</p>
+                    <code>{}</code>
+                  </body>
+                  <script>
+                    setTimeout(() => window.location.reload(), {})
+                  </script>
+                </html>
+                "#,
                 access.code,
                 WAIT_FOR_SECS * 1_000 + 1_000
             ))
@@ -259,9 +259,15 @@ impl SharedAccessToken {
         tokio::spawn(async move {
             loop {
                 let wait_time = token.get_expires_in() - pad_secs;
-                tracing::info!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
-                tracing::info!("Refresh sleeping {} seconds...", wait_time);
+                tracing::info!(
+                    "{} - {} = {}. Fresh sleeping {} seconds...",
+                    token.get_expires_in(),
+                    pad_secs,
+                    wait_time,
+                    wait_time
+                );
                 tokio::time::sleep(Duration::from_secs(wait_time)).await;
+                tracing::info!("oauth::auto_refresh awake. Refreshing token!");
                 Self::do_refresh(client.clone(), &token, &config)
                     .await
                     .expect("Could not refresh token!");
@@ -277,6 +283,7 @@ impl SharedAccessToken {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let refresh_url = config.get_token_url();
         let body = config.to_token_refresh_body(&token.get_refresh_token());
+        tracing::debug!("Refresh token request body: {:#?}", body);
         let res = client
             .post(refresh_url)
             .form(&body)
@@ -289,13 +296,16 @@ impl SharedAccessToken {
         Ok(())
     }
 
+    #[tracing::instrument]
     fn apply_refresh(&self, payload: AccessToken) {
+        tracing::debug!("Applying token refresh payload {:#?}", payload);
         let mut token = self.data.lock().unwrap();
         token.access_token = payload.access_token;
         token.expires_in = payload.expires_in;
         token.ext_expires_in = payload.ext_expires_in;
         token.refresh_token = payload.refresh_token;
         token.scope = payload.scope;
+        tracing::debug!("New token: {:#?}", token);
     }
 
     fn get_expires_in(&self) -> u64 {
