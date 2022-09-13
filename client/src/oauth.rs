@@ -1,24 +1,28 @@
 use core::fmt;
-use std::sync::{Arc, Mutex};
+use std::{
+    env,
+    process::Command,
+    sync::{Arc, Mutex},
+};
 
 use tokio::{sync::oneshot, time::Duration};
 use warp::Filter;
 
 use crate::http::DurableClient;
 
-const WAIT_FOR_SECS: u64 = 3;
-
 #[tracing::instrument]
 pub async fn flow(
     config: OAuthConfiguration,
     client: &DurableClient,
+    wait_for_secs: u64,
 ) -> Result<SharedAccessToken, Box<dyn std::error::Error>> {
     let (killtx, killrx) = oneshot::channel::<u8>();
+    let refresh_time = wait_for_secs * 1_000 + 1000;
     let access_code_filter = warp::get()
         .and(warp::path("redirect"))
         .and(with_config(config.clone()))
         .and(warp::query::<AccessCode>())
-        .map(|config: OAuthConfiguration, access: AccessCode| {
+        .map(move |config: OAuthConfiguration, access: AccessCode| {
             config.set_access_code(&access.code);
             warp::reply::html(format!(
                 r#"
@@ -40,13 +44,23 @@ pub async fn flow(
                   </script>
                 </html>
                 "#,
-                access.code,
-                WAIT_FOR_SECS * 1_000 + 1_000
+                access.code, refresh_time
             ))
         });
 
     let auth_url = &config.get_authorize_url();
-    webbrowser::open(auth_url).expect("Could not open browser");
+    if cfg!(unix) {
+        // webbrowser doesn't seem to work on WSL.
+        // In reality, this is not unix specific code but vitale232 WSL specific code
+        let browser = env::var("BROWSER").unwrap();
+        tracing::info!("BROWSER: {}", browser);
+        Command::new(browser)
+            .arg(&auth_url)
+            .spawn()
+            .expect("Could not open browser");
+    } else {
+        webbrowser::open(auth_url).expect("Could not open browser");
+    }
 
     let port = config.get_port();
     let (_, server) = warp::serve(access_code_filter).bind_with_graceful_shutdown(
@@ -57,9 +71,9 @@ pub async fn flow(
             tracing::info!("got signal");
         },
     );
-    tokio::spawn(async {
-        tracing::info!("{} seconds to go...", WAIT_FOR_SECS);
-        tokio::time::sleep(tokio::time::Duration::from_secs(WAIT_FOR_SECS)).await;
+    tokio::spawn(async move {
+        tracing::info!("{} seconds to go...", wait_for_secs);
+        tokio::time::sleep(tokio::time::Duration::from_secs(wait_for_secs)).await;
         killtx.send(1).expect("Could not send kill signal!");
         tracing::info!("Graceful killshot transmitted")
     });

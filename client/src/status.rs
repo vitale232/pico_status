@@ -92,6 +92,35 @@ pub async fn set_status(
 }
 
 #[tracing::instrument]
+pub async fn set_graceful_shutdown(
+    client: &DurableClient,
+    pi_ip_addr: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let url = format!(
+        "http://{}/yellow?line3=  Good bye&line4=    for now...",
+        pi_ip_addr
+    );
+    tracing::info!("Graceful shutdown URL: {:#?}", url);
+    let pires = client.get(url).send().await?.text().await?;
+    tracing::info!("Pi Response {:#?}", pires);
+    Ok(pires)
+}
+
+#[tracing::instrument]
+pub async fn set_fatal_error(
+    client: &DurableClient,
+    pi_ip_addr: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let url = format!(
+        "http://{}/late?line2= FATAL ERROR!&line3=   FATAL ERROR!&line5=  We can't go on",
+        pi_ip_addr
+    );
+    tracing::info!("Graceless shutdown URL: {:#?}", url);
+    let pires = client.get(url).send().await?.text().await?;
+    tracing::info!("Pi Response {:#?}", pires);
+    Ok(pires)
+}
+#[tracing::instrument]
 pub async fn debug_status(
     client: &DurableClient,
     token: &SharedAccessToken,
