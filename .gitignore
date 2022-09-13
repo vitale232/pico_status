@@ -1,4 +1,6 @@
 .env
+.bakenv
+.pi_pass
 secrets.py
 /client/target
 __pycache__

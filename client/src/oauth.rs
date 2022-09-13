@@ -1,52 +1,66 @@
 use core::fmt;
-use std::sync::{Arc, Mutex};
+use std::{
+    env,
+    process::Command,
+    sync::{Arc, Mutex},
+};
 
 use tokio::{sync::oneshot, time::Duration};
 use warp::Filter;
 
 use crate::http::DurableClient;
 
-const WAIT_FOR_SECS: u64 = 3;
-
 #[tracing::instrument]
 pub async fn flow(
     config: OAuthConfiguration,
     client: &DurableClient,
+    wait_for_secs: u64,
 ) -> Result<SharedAccessToken, Box<dyn std::error::Error>> {
     let (killtx, killrx) = oneshot::channel::<u8>();
+    let refresh_time = wait_for_secs * 1_000 + 1000;
     let access_code_filter = warp::get()
         .and(warp::path("redirect"))
         .and(with_config(config.clone()))
         .and(warp::query::<AccessCode>())
-        .map(|config: OAuthConfiguration, access: AccessCode| {
+        .map(move |config: OAuthConfiguration, access: AccessCode| {
             config.set_access_code(&access.code);
             warp::reply::html(format!(
                 r#"
-                    <!DOCTYPE html>
-                    <html lang='en'>
-                      <head>
-                        <meta charset='UTF-8' />
-                        <meta http-equiv='X-UA-Compatible' content='IE=edge' />
-                        <meta name='viewport' content='device-width' />
-                        <title>Warp OAuth</title>
-                      </head>
-                      <body>
-                        <h1>Access Code</h1>
-                        <p>Access code recieved!</p>
-                        <code>{}</code>
-                      </body>
-                      <script>
-                        setTimeout(() => window.location.reload(), {})
-                      </script>
-                    </html>
-                    "#,
-                access.code,
-                WAIT_FOR_SECS * 1_000 + 1_000
+                <!DOCTYPE html>
+                <html lang='en'>
+                  <head>
+                    <meta charset='UTF-8' />
+                    <meta http-equiv='X-UA-Compatible' content='IE=edge' />
+                    <meta name='viewport' content='device-width' />
+                    <title>Warp OAuth</title>
+                  </head>
+                  <body>
+                    <h1>Access Code</h1>
+                    <p>Access code recieved!</p>
+                    <code>{}</code>
+                  </body>
+                  <script>
+                    setTimeout(() => window.location.reload(), {})
+                  </script>
+                </html>
+                "#,
+                access.code, refresh_time
             ))
         });
 
     let auth_url = &config.get_authorize_url();
-    webbrowser::open(auth_url).expect("Could not open browser");
+    if cfg!(unix) {
+        // webbrowser doesn't seem to work on WSL.
+        // In reality, this is not unix specific code but vitale232 WSL specific code
+        let browser = env::var("BROWSER").unwrap();
+        tracing::info!("BROWSER: {}", browser);
+        Command::new(browser)
+            .arg(&auth_url)
+            .spawn()
+            .expect("Could not open browser");
+    } else {
+        webbrowser::open(auth_url).expect("Could not open browser");
+    }
 
     let port = config.get_port();
     let (_, server) = warp::serve(access_code_filter).bind_with_graceful_shutdown(
@@ -57,9 +71,9 @@ pub async fn flow(
             tracing::info!("got signal");
         },
     );
-    tokio::spawn(async {
-        tracing::info!("{} seconds to go...", WAIT_FOR_SECS);
-        tokio::time::sleep(tokio::time::Duration::from_secs(WAIT_FOR_SECS)).await;
+    tokio::spawn(async move {
+        tracing::info!("{} seconds to go...", wait_for_secs);
+        tokio::time::sleep(tokio::time::Duration::from_secs(wait_for_secs)).await;
         killtx.send(1).expect("Could not send kill signal!");
         tracing::info!("Graceful killshot transmitted")
     });
@@ -259,9 +273,15 @@ impl SharedAccessToken {
         tokio::spawn(async move {
             loop {
                 let wait_time = token.get_expires_in() - pad_secs;
-                tracing::info!("{} - {} = {}", token.get_expires_in(), pad_secs, wait_time);
-                tracing::info!("Refresh sleeping {} seconds...", wait_time);
+                tracing::info!(
+                    "{} - {} = {}. Fresh sleeping {} seconds...",
+                    token.get_expires_in(),
+                    pad_secs,
+                    wait_time,
+                    wait_time
+                );
                 tokio::time::sleep(Duration::from_secs(wait_time)).await;
+                tracing::info!("oauth::auto_refresh awake. Refreshing token!");
                 Self::do_refresh(client.clone(), &token, &config)
                     .await
                     .expect("Could not refresh token!");
@@ -277,6 +297,7 @@ impl SharedAccessToken {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let refresh_url = config.get_token_url();
         let body = config.to_token_refresh_body(&token.get_refresh_token());
+        tracing::debug!("Refresh token request body: {:#?}", body);
         let res = client
             .post(refresh_url)
             .form(&body)
@@ -289,13 +310,16 @@ impl SharedAccessToken {
         Ok(())
     }
 
+    #[tracing::instrument]
     fn apply_refresh(&self, payload: AccessToken) {
+        tracing::debug!("Applying token refresh payload {:#?}", payload);
         let mut token = self.data.lock().unwrap();
         token.access_token = payload.access_token;
         token.expires_in = payload.expires_in;
         token.ext_expires_in = payload.ext_expires_in;
         token.refresh_token = payload.refresh_token;
         token.scope = payload.scope;
+        tracing::debug!("New token: {:#?}", token);
     }
 
     fn get_expires_in(&self) -> u64 {

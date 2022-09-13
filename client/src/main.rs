@@ -1,86 +1,44 @@
+mod cli;
 mod http;
 mod oauth;
 mod status;
 
-use oauth::OAuthConfiguration;
-use tokio::time::Duration;
-use tracing::Level;
+use crate::{cli::initialize_tracing, http::build_durable_client};
+use cli::{Cli, Parser};
+use tokio::signal;
 
-#[macro_use]
-extern crate dotenv_codegen;
 #[macro_use]
 extern crate serde;
 
-static CLIENT_ID: &str = dotenv!("CLIENT_ID");
-static TENANT_ID: &str = dotenv!("TENANT_ID");
-static PI_IP: &str = dotenv!("PI_IP");
-
-const POLL_AFTER_SECS: u64 = 60;
-const REFRESH_EXPIRY_PADDING_SECS: u64 = 120;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let subscriber = tracing_subscriber::fmt()
-        .with_level(true)
-        .with_thread_ids(true)
-        .with_target(true)
-        .with_max_level(Level::DEBUG)
-        .with_line_number(true)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber)?;
+    let args = Cli::parse();
 
-    let scope = "Presence.Read Calendars.read offline_access";
-    let config = OAuthConfiguration::new(CLIENT_ID, TENANT_ID, scope);
+    initialize_tracing(&args).expect("Could not initialize tracing infrastructure!");
+    tracing::info!("CLI: {:?}", args);
 
-    let client = http::build_durable_client();
-    let token = oauth::flow(config.clone(), &client).await?;
-    token.autorefresh(
-        client.clone(),
-        token.clone(),
-        config.clone(),
-        REFRESH_EXPIRY_PADDING_SECS,
-    );
+    let client = build_durable_client();
+    let pico_ip = args.get_pico_ip();
 
-    let err_tolerance = 5;
-    let mut err_count = 0;
-    loop {
-        if err_count > err_tolerance {
-            tracing::error!("Err number {} has occurred! This means the tolerance of {} has been surpased. Exiting!", err_count, err_tolerance);
-            panic!("Err number {} has occurred! This means the tolerance of {} has been surpased. Exiting!", err_count, err_tolerance);
+    // `tokio::select!` will concurrently execute and poll the futures. The
+    // first to return or error will stop the listeners and execute the
+    // "callback". Based on how the error occurred, it will be handled below.
+    let is_graceful_shutdown = tokio::select! {
+        res = cli::run(args, &client) => {
+                tracing::error!("Fatal error: {:?}", res);
+                false
+        },
+        _ = signal::ctrl_c() => {
+            tracing::info!("Graceful shutdown...");
+            true
         }
+    };
 
-        let status = match status::get_status(&client, &token).await {
-            Ok(status) => status,
-            Err(err) => {
-                tracing::warn!("An error occurred while fetching the status: {:#?}", err);
-                err_count += 1;
-                tracing::warn!(
-                    "This is the {} err occurrence. Tolerates {}.",
-                    err_count,
-                    err_tolerance
-                );
-                status::debug_status(&client, &token).await?;
-                continue;
-            }
-        };
-
-        match status::set_status(&client, &status, PI_IP).await {
-            Ok(res) => res,
-            Err(err) => {
-                tracing::warn!("An error occurred while fetching the status: {:#?}", err);
-                err_count += 1;
-                tracing::warn!(
-                    "This is the {} err occurrence. Tolerates {}.",
-                    err_count,
-                    err_tolerance
-                );
-                continue;
-            }
-        };
-
-        tokio::time::sleep(Duration::from_secs(POLL_AFTER_SECS)).await;
+    if is_graceful_shutdown {
+        status::set_graceful_shutdown(&client, &pico_ip).await?;
+    } else {
+        status::set_fatal_error(&client, &pico_ip).await?;
     }
 
-    #[allow(unreachable_code)]
     Ok(())
 }
