@@ -3,7 +3,6 @@ mod http;
 mod oauth;
 mod status;
 
-use crate::{cli::initialize_tracing, http::build_durable_client};
 use cli::{Cli, Parser};
 use tokio::signal;
 
@@ -14,10 +13,10 @@ extern crate serde;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
 
-    initialize_tracing(&args).expect("Could not initialize tracing infrastructure!");
+    cli::initialize_tracing(&args).expect("Could not initialize tracing infrastructure!");
     tracing::info!("CLI: {:?}", args);
 
-    let client = build_durable_client();
+    let client = http::build_durable_client();
     let pico_ip = args.get_pico_ip();
 
     // `tokio::select!` will concurrently execute and poll the futures. The
