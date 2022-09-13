@@ -1,4 +1,5 @@
 .env
+.bakenv
 secrets.py
 /client/target
 __pycache__
