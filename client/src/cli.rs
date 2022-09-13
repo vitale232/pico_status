@@ -16,6 +16,9 @@ pub fn initialize_tracing(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(log_level)
         .with_thread_ids(true)
+        .with_line_number(true)
+        .with_file(true)
+        .with_target(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
     Ok(())
