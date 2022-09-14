@@ -13,7 +13,7 @@ extern crate serde;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
 
-    cli::initialize_tracing(&args).expect("Could not initialize tracing infrastructure!");
+    cli::init_tracing(&args).expect("Could not initialize tracing infrastructure!");
     tracing::info!("CLI: {:?}", args);
 
     let client = http::build_durable_client();

@@ -7,7 +7,7 @@ pub use clap::Parser;
 use tokio::time::Duration;
 use tracing::Level;
 
-pub fn initialize_tracing(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
+pub fn init_tracing(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     let log_level = if cli.is_verbose() {
         Level::TRACE
     } else {
@@ -33,7 +33,7 @@ pub struct Cli {
     #[clap(value_parser)]
     client_id: String,
 
-    #[clap(value_parser)]
+    #[clap(value_parser, default_value = "common")]
     tenant_id: String,
 
     #[clap(short, long, value_parser, default_value = "3")]
