@@ -10,7 +10,6 @@ description = "Application that updates Raspberry Pi Pico W with MS Teams/Outloo
 chrono = { version = "0.4.22", features = ["serde"] }
 clap = { version = "3.2.21", features = ["derive"] }
 dotenv_codegen = "0.15.0"
-futures = "0.3.24"
 reqwest = { version = "0.11.11", features = ["json"] }
 reqwest-middleware = "0.1"
 reqwest-retry = "0.1"

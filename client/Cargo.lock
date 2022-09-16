@@ -1027,7 +1027,6 @@ dependencies = [
  "chrono",
  "clap",
  "dotenv_codegen",
- "futures",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",

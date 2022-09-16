@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime, Utc};
-use futures::future;
 use serde::{de, Deserialize, Deserializer};
 
 use crate::http::DurableClient;
@@ -13,7 +12,7 @@ pub async fn get_status(
     token: &SharedAccessToken,
 ) -> Result<Status, Box<dyn std::error::Error>> {
     let (pres_result, cal_result) =
-        future::join(get_presence(client, token), get_calendar(client, token)).await;
+        tokio::join!(get_presence(client, token), get_calendar(client, token));
 
     let presence = match pres_result {
         Ok(pres) => pres,
