@@ -6,49 +6,8 @@ import network
 import paint
 from secrets import ssid, password
 
-ERROR_AFTER_SECS = 10
 
-
-def unquote(string):
-    """unquote('abc%20def') -> b'abc def'."""
-    _hexdig = "0123456789ABCDEFabcdef"
-    _hextobyte = None
-
-    # Note: strings are encoded as UTF-8. This is only an issue if it contains
-    # unescaped non-ASCII characters, which URIs should not.
-    if not string:
-        return b""
-
-    if isinstance(string, str):
-        string = string.encode("utf-8")
-
-    bits = string.split(b"%")
-    print(f"bits={bits}")
-    if len(bits) == 1:
-        return string
-
-    res = [bits[0]]
-    append = res.append
-
-    # Delay the initialization of the table to not waste memory
-    # if the function is never called
-    if _hextobyte is None:
-        _hextobyte = {
-            (a + b).encode(): bytes([int(a + b, 16)]) for a in _hexdig for b in _hexdig
-        }
-
-    for item in bits[1:]:
-        try:
-            append(_hextobyte[item[:2]])
-            append(item[2:])
-        except KeyError:
-            append(b"%")
-            append(item)
-
-    return b"".join(res)
-
-
-def connect():
+def connect(wait_for_conn_secs):
     # Connect to WLAN
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
@@ -59,7 +18,7 @@ def connect():
         print("Waiting for connection...")
         sleep(1)
         attempts += 1
-        if attempts > ERROR_AFTER_SECS:
+        if attempts > wait_for_conn_secs:
             raise RuntimeError("Could not connect to WiFi!")
 
     ip = wlan.ifconfig()[0]
@@ -73,6 +32,41 @@ def open_socket(ip):
     connection.bind(address)
     connection.listen(1)
     return connection
+
+
+def serve(connection, lcd):
+    print("Staring server...")
+    color_state = "GREEN"
+    while True:
+        client = connection.accept()[0]
+        request = client.recv(1024)
+        request = str(request)
+        print(f"Incoming Request:\n{request}")
+        html = ""
+        try:
+            if not is_supported_url(request):
+                html = render404()
+            else:
+                color_state = paint.paint_status(
+                    lcd, *parse_request(request, color_state)
+                )
+                html = render(color_state)
+            print(f"html={html}")
+            client.send(html)
+            client.close()
+        except Exception as exc:
+            print(f"An exception occurred: {exc}")
+            client.close()
+
+
+def is_supported_url(request):
+    url = request.split()[1].lower()
+    return (
+        url.startswith("/red")
+        or url.startswith("/yellow")
+        or url.startswith("/green")
+        or url.startswith("/late")
+    )
 
 
 def parse_request(req, state):
@@ -161,36 +155,40 @@ Content-Type: text/html
 """
 
 
-def is_supported_url(request):
-    url = request.split()[1].lower()
-    return (
-        url.startswith("/red")
-        or url.startswith("/yellow")
-        or url.startswith("/green")
-        or url.startswith("/late")
-    )
+def unquote(string):
+    """unquote('abc%20def') -> b'abc def'."""
+    _hexdig = "0123456789ABCDEFabcdef"
+    _hextobyte = None
 
+    # Note: strings are encoded as UTF-8. This is only an issue if it contains
+    # unescaped non-ASCII characters, which URIs should not.
+    if not string:
+        return b""
 
-def serve(connection, lcd):
-    print("Staring server...")
-    color_state = "GREEN"
-    while True:
-        client = connection.accept()[0]
-        request = client.recv(1024)
-        request = str(request)
-        print(f"Incoming Request:\n{request}")
-        html = ""
+    if isinstance(string, str):
+        string = string.encode("utf-8")
+
+    bits = string.split(b"%")
+    print(f"bits={bits}")
+    if len(bits) == 1:
+        return string
+
+    res = [bits[0]]
+    append = res.append
+
+    # Delay the initialization of the table to not waste memory
+    # if the function is never called
+    if _hextobyte is None:
+        _hextobyte = {
+            (a + b).encode(): bytes([int(a + b, 16)]) for a in _hexdig for b in _hexdig
+        }
+
+    for item in bits[1:]:
         try:
-            if not is_supported_url(request):
-                html = render404()
-            else:
-                color_state = paint.paint_status(
-                    lcd, *parse_request(request, color_state)
-                )
-                html = render(color_state)
-            print(f"html={html}")
-            client.send(html)
-            client.close()
-        except Exception as exc:
-            print(f"An exception occurred: {exc}")
-            client.close()
+            append(_hextobyte[item[:2]])
+            append(item[2:])
+        except KeyError:
+            append(b"%")
+            append(item)
+
+    return b"".join(res)

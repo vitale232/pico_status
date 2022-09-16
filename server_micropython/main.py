@@ -38,10 +38,12 @@ if __name__ == "__main__":
 
     sleep(2)
 
+    wait_for_conn_secs = 10
+
     while True:
         connection = None
         try:
-            ip = server.connect()
+            ip = server.connect(wait_for_conn_secs)
             connection = server.open_socket(ip)
             paint.paint_ready(lcd, "Ready and accepting requests!", ip)
 
@@ -50,5 +52,5 @@ if __name__ == "__main__":
             if connection:
                 connection.close()
             print(f"An error occurred: {exc}")
-            paint.paint_error(lcd, ssid, server.ERROR_AFTER_SECS, retry=True)
+            paint.paint_error(lcd, ssid, wait_for_conn_secs, retry=True)
             listen_for_retry_click(lcd, keyA, keyB)
