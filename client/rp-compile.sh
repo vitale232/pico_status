@@ -1,7 +1,9 @@
 #/usr/bin/sh
 
 # currently not using this script, as cross compiling with my config requires
-# we vendor openssl, which means it will get out of date.
+# we vendor openssl, which means it will get out of date. need to figure out
+# how to make it so only targeting armv7-unknown-linux-gnueabihf vendors
+# openssl.
 
 PI_IP=192.168.1.138
 TARGET=armv7-unknown-linux-gnueabihf
