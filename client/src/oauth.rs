@@ -1,12 +1,17 @@
-use core::fmt;
+use axum::{
+    extract::{Extension, Query},
+    response::{Html, IntoResponse},
+    routing::get,
+    Router,
+};
 use std::{
-    env,
+    env, fmt,
+    net::SocketAddr,
     process::Command,
     sync::{Arc, Mutex},
 };
-
-use tokio::{sync::oneshot, time::Duration};
-use warp::Filter;
+use tokio::time::Duration;
+use tower::ServiceBuilder;
 
 use crate::http::DurableClient;
 
@@ -14,40 +19,8 @@ use crate::http::DurableClient;
 pub async fn flow(
     config: OAuthConfiguration,
     client: &DurableClient,
-    wait_for_secs: u64,
+    shutdown_after_secs: u64,
 ) -> Result<SharedAccessToken, Box<dyn std::error::Error>> {
-    let (killtx, killrx) = oneshot::channel::<u8>();
-    let refresh_time = wait_for_secs * 1_000 + 1000;
-    let access_code_filter = warp::get()
-        .and(warp::path("redirect"))
-        .and(with_config(config.clone()))
-        .and(warp::query::<AccessCode>())
-        .map(move |config: OAuthConfiguration, access: AccessCode| {
-            config.set_access_code(&access.code);
-            warp::reply::html(format!(
-                r#"
-                <!DOCTYPE html>
-                <html lang='en'>
-                  <head>
-                    <meta charset='UTF-8' />
-                    <meta http-equiv='X-UA-Compatible' content='IE=edge' />
-                    <meta name='viewport' content='device-width' />
-                    <title>Warp OAuth</title>
-                  </head>
-                  <body>
-                    <h1>Access Code</h1>
-                    <p>Access code recieved!</p>
-                    <code>{}</code>
-                  </body>
-                  <script>
-                    setTimeout(() => window.location.reload(), {})
-                  </script>
-                </html>
-                "#,
-                access.code, refresh_time
-            ))
-        });
-
     let auth_url = &config.get_authorize_url();
     if cfg!(unix) {
         // webbrowser doesn't seem to work on WSL.
@@ -62,22 +35,8 @@ pub async fn flow(
         webbrowser::open(auth_url).expect("Could not open browser");
     }
 
-    let port = config.get_port();
-    let (_, server) = warp::serve(access_code_filter).bind_with_graceful_shutdown(
-        ([127, 0, 0, 1], port),
-        async move {
-            tracing::info!("waiting for signal");
-            killrx.await.expect("Error handling shutdown receiver");
-            tracing::info!("got signal");
-        },
-    );
-    tokio::spawn(async move {
-        tracing::info!("{} seconds to go...", wait_for_secs);
-        tokio::time::sleep(tokio::time::Duration::from_secs(wait_for_secs)).await;
-        killtx.send(1).expect("Could not send kill signal!");
-        tracing::info!("Graceful killshot transmitted")
-    });
-    tokio::task::spawn(server).await?;
+    run_server(&config, shutdown_after_secs).await?;
+    tracing::info!("The OAuth server has terminated. Fetching token.");
 
     let token_url = config.get_token_url();
     let body = config.to_token_request_body();
@@ -93,10 +52,70 @@ pub async fn flow(
     Ok(SharedAccessToken::new(token))
 }
 
-fn with_config(
-    config: OAuthConfiguration,
-) -> impl Filter<Extract = (OAuthConfiguration,), Error = std::convert::Infallible> + Clone {
-    warp::any().map(move || config.clone())
+#[tracing::instrument]
+async fn run_server(
+    config: &OAuthConfiguration,
+    shutdown_after_secs: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let refresh_time = shutdown_after_secs * 1000 + 300;
+
+    let app = Router::new()
+        .route("/redirect", get(handle_oauth_redirect))
+        .layer(
+            ServiceBuilder::new()
+                .layer(Extension(config.clone()))
+                .layer(Extension(refresh_time))
+                .into_inner(),
+        );
+
+    let port = config.get_port();
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .with_graceful_shutdown(shutdown_timer(shutdown_after_secs))
+        .await?;
+
+    Ok(())
+}
+
+#[tracing::instrument]
+async fn handle_oauth_redirect(
+    config: Extension<OAuthConfiguration>,
+    refresh_after: Extension<u64>,
+    Query(access): Query<AccessCode>,
+) -> impl IntoResponse {
+    tracing::debug!("Access code received at server with value {:#?}", access);
+    config.set_access_code(&access.code);
+    Html(format!(
+        r#"
+        <!DOCTYPE html>
+        <html lang='en'>
+          <head>
+            <meta charset='UTF-8' />
+            <meta http-equiv='X-UA-Compatible' content='IE=edge' />
+            <meta name='viewport' content='device-width' />
+            <title>Warp OAuth</title>
+          </head>
+          <body>
+            <h1>Access Code</h1>
+            <p>Access code recieved!</p>
+            <code>{}</code>
+          </body>
+        </html>
+        <script>
+          setTimeout(() => window.location.reload(), {});
+        </script>
+        "#,
+        access.code, *refresh_after
+    ))
+}
+
+#[tracing::instrument]
+async fn shutdown_timer(wait_for_secs: u64) {
+    tracing::debug!("Waiting for {} seconds to send shutdown...", wait_for_secs);
+    tokio::time::sleep(Duration::from_secs(wait_for_secs)).await;
+    tracing::info!("Shutdown signal fired!");
 }
 
 #[derive(Clone, Debug)]
@@ -264,9 +283,8 @@ impl SharedAccessToken {
 
     #[tracing::instrument]
     pub fn autorefresh(
-        &self,
-        client: DurableClient,
         token: SharedAccessToken,
+        client: DurableClient,
         config: OAuthConfiguration,
         pad_secs: u64,
     ) {

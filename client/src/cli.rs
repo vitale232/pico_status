@@ -1,6 +1,6 @@
 use crate::{
     http::DurableClient,
-    oauth::{self, OAuthConfiguration},
+    oauth::{self, OAuthConfiguration, SharedAccessToken},
     status,
 };
 pub use clap::Parser;
@@ -73,9 +73,9 @@ pub async fn run(cli: Cli, client: &DurableClient) -> Result<(), Box<dyn std::er
 
     let config = OAuthConfiguration::new(&cli.client_id, &cli.tenant_id, &cli.scope);
     let token = oauth::flow(config.clone(), client, cli.auth_wait_for).await?;
-    token.autorefresh(
-        client.clone(),
+    SharedAccessToken::autorefresh(
         token.clone(),
+        client.clone(),
         config.clone(),
         cli.refresh_expiry_padding,
     );
