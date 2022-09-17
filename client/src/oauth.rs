@@ -101,11 +101,11 @@ async fn handle_oauth_redirect(
             <h1>Access Code</h1>
             <p>Access code recieved!</p>
             <code>{}</code>
+            <script>
+              setTimeout(() => window.location.reload(), {});
+            </script>
           </body>
         </html>
-        <script>
-          setTimeout(() => window.location.reload(), {});
-        </script>
         "#,
         access.code, *refresh_after
     ))
