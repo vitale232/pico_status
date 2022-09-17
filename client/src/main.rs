@@ -23,8 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // first to return or error will stop the listeners and execute the
     // "callback". Based on how the error occurred, it will be handled below.
     let is_graceful_shutdown = tokio::select! {
-        res = cli::run(args, &client) => {
-            tracing::error!("Fatal error: {:?}", res);
+        err = cli::run(args, &client) => {
+            tracing::error!("Fatal error: {:?}", err);
             false
         },
         _ = signal::ctrl_c() => {
