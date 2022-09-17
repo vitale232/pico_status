@@ -194,16 +194,16 @@ pub struct Status {
 impl Status {
     pub fn new(presence: &Presence, calendar: &CalendarView) -> Self {
         // This assumes that the CalendarView is ordered by start/dateTime
-        let next_meeting = calendar.value.iter().find(|e| e.end > Utc::now());
+        let next_event = calendar.value.iter().find(|evt| evt.end > Utc::now());
         Self {
-            event_attendee_count: next_meeting
+            event_attendee_count: next_event
                 .map(|mtg| mtg.attendees.len())
                 .unwrap_or_default(),
             availability: presence.availability.clone(),
             activity: presence.activity.clone(),
-            event_start: next_meeting.map(|mtg| mtg.start).unwrap_or_default(),
-            event_end: next_meeting.map(|mtg| mtg.end).unwrap_or_default(),
-            event_subject: next_meeting
+            event_start: next_event.map(|mtg| mtg.start).unwrap_or_default(),
+            event_end: next_event.map(|mtg| mtg.end).unwrap_or_default(),
+            event_subject: next_event
                 .map(|mtg| mtg.subject.clone())
                 .unwrap_or_default(),
         }
@@ -222,13 +222,13 @@ impl Status {
         )
     }
 
-    pub fn is_in_meeting(&self) -> bool {
+    pub fn is_busy(&self) -> bool {
         let now = Utc::now();
         now > self.event_start && now < self.event_end
     }
 
     pub fn is_late(&self) -> bool {
-        if !self.is_in_meeting() {
+        if !self.is_busy() {
             return false;
         }
         matches!(self.availability, Availability::Away)
@@ -297,8 +297,8 @@ impl Status {
     }
 
     fn line5(&self) -> String {
-        let value: String = if self.is_in_meeting() {
-            "Meeting goes until:".into()
+        let value: String = if self.is_busy() {
+            "Event goes until:".into()
         } else {
             format!("Next Event ({}):", self.event_start.format("%m/%d"))
         };
@@ -306,7 +306,7 @@ impl Status {
     }
 
     fn line6(&self) -> String {
-        let time = match self.is_in_meeting() {
+        let time = match self.is_busy() {
             true => self.event_end,
             false => self.event_start,
         };
@@ -414,7 +414,7 @@ mod tests {
         let status = Status::new(&presence, &calendar);
         println!("{:?}", status.uri());
 
-        assert!(!status.is_in_meeting());
+        assert!(!status.is_busy());
         assert_eq!(
             status.uri(),
             format!(
@@ -441,12 +441,12 @@ mod tests {
 
         let status = Status::new(&presence, &cal);
         println!("{:?}", status.uri());
-        assert!(status.is_in_meeting());
+        assert!(status.is_busy());
 
         assert_eq!(
             status.uri(),
             format!(
-                "{}?line1={:>28}&line2= {}&line3= ({})&line5= Meeting goes until:&line6=  {} ({})&line7=  {} attendees",
+                "{}?line1={:>28}&line2= {}&line3= ({})&line5= Event goes until:&line6=  {} ({})&line7=  {} attendees",
                 "red",
                 Local::now().format("%I:%M %P"),
                 "Busy",
@@ -468,13 +468,13 @@ mod tests {
 
         let status = Status::new(&presence, &cal);
         println!("{:?}", status.uri());
-        assert!(status.is_in_meeting());
+        assert!(status.is_busy());
         assert!(status.is_late());
 
         assert_eq!(
             status.uri(),
             format!(
-                "{}?line1={:>28}&line2= {}&line3= ({})&line5= Meeting goes until:&line6=  {} ({})&line7=  {} attendees",
+                "{}?line1={:>28}&line2= {}&line3= ({})&line5= Event goes until:&line6=  {} ({})&line7=  {} attendees",
                 "late",
                 Local::now().format("%I:%M %P"),
                 "Away from Computer",
