@@ -27,33 +27,62 @@ pub fn init_tracing(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Debug, Parser)]
 #[clap(version, about, long_about = None)]
 pub struct Cli {
-    #[clap(value_parser)]
+    #[clap(
+        value_parser,
+        help = "The IP address of the Pico your connecting to (e.g. 169.420.1.469)"
+    )]
     pico_ip: String,
 
-    #[clap(value_parser)]
+    #[clap(
+        value_parser,
+        help = "The OAuth Client ID of the registered application from Azure Portal"
+    )]
     client_id: String,
 
-    #[clap(value_parser, default_value = "common")]
+    #[clap(
+        value_parser,
+        default_value = "common",
+        help = "The MS tenant ID to connect to, including the 'common' tennant which is default"
+    )]
     tenant_id: String,
 
-    #[clap(short, long, value_parser, default_value = "3")]
+    #[clap(
+        short,
+        long,
+        value_parser,
+        default_value = "3",
+        help = "The time, in seconds, that the pico-status tool will wait before killing the local server that supports OAuth"
+    )]
     auth_wait_for: u64,
 
-    #[clap(short, long, value_parser, default_value = "60")]
+    #[clap(
+        short,
+        long,
+        value_parser,
+        default_value = "60",
+        help = "The time, in seconds, that the tool waits before polling MS for your status and updating the Pico W"
+    )]
     poll_after: u64,
 
-    #[clap(short, long, value_parser, default_value = "120")]
+    #[clap(
+        short,
+        long,
+        value_parser,
+        default_value = "120",
+        help = "The number of seconds that the pico-client will use to 'pad', or trim, the auth token's expiry"
+    )]
     refresh_expiry_padding: u64,
 
     #[clap(
         short,
         long,
         value_parser,
-        default_value = "Presence.Read Calendars.Read offline_access"
+        default_value = "Presence.Read Calendars.Read offline_access",
+        help = "The Scope to require on the auth token. Only scopes configured in the OAuth app will work"
     )]
     scope: String,
 
-    #[clap(short, long, action)]
+    #[clap(short, long, action, help = "Include exxxtra verbose tracing")]
     verbose: bool,
 }
 

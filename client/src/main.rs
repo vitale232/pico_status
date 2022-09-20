@@ -19,14 +19,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = http::build_durable_client();
     let pico_ip = args.get_pico_ip();
 
-    // `tokio::select!` will concurrently execute and poll the futures. The
-    // first to return or error will stop the listeners and execute the
+    // `tokio::select!` proc macro will concurrently execute/poll the futures.
+    // The first to return or error will stop the listeners and execute the
     // "callback". Based on how the error occurred, it will be handled below.
     let is_graceful_shutdown = tokio::select! {
+        // An error from `cli::run` means we've exceeded the error threshold
+        // and have encountered a fatal error
         err = cli::run(args, &client) => {
             tracing::error!("Fatal error: {:?}", err);
             false
         },
+        // A value here means the CLI caller has attempted to cancel the program
+        // so we'll print a message to the Pico and exit.
         _ = signal::ctrl_c() => {
             tracing::info!("Graceful shutdown...");
             true
