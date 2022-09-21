@@ -62,9 +62,11 @@ wget -O - "http://xxx.xxx.x.xxx/red?line1=                    08:00 am&line2= Bu
 A client application has been created to integrate the pico w and its LCD
 with MS Teams and outlook. The app requires that you configure an OAuth application
 in the Azure Portal for your work or school managed account. Once that is setup,
-you'll need to store some key variables from your configuration in the `.env`
-file within the root of the client directory. This file does not exist, so create
-it:
+you'll need to take note of some key variables from your configuration. For convenience,
+you may want to store them in a local `.env` file, or perhaps your password
+manager.
+
+Here's an example of saving the required info to an `.env` file:
 
 ```shell
 touch client/.env
@@ -75,19 +77,66 @@ touch client/.env
 # PI_IP=
 ```
 
-Once the app is configured with permissions to view your Presence and Calendar,
-you should be able to build it with Rust's package
-management tooling, called Cargo. The repository is setup to compile
-to the host system's architecture by default, assuming Ubuntu. There is also a linker
-configured for cross copmilation from GNU to Windows. If you intend to cross
-compile, you'll need to install the linker on the host system.
+### Running the Client
 
-Once build, run the app from the command line. It should pop open a browser
-that prompts you to login to your new OAuth app with your MS account. Approve
-and login, which will send an Accesss Code back to the client app, which
-will be running a warp server to support transferring the access code from
-MS's infrastructure into the app. Once the access_code is received, the warp
-server will be killed.
+The client application has been developed with a command line interface,
+which should provide end users with lots of flexibility in how they use
+and configure the tool.
+
+The help can be accessed once the project is installed by passing the
+help flag to the tool:
+
+```shell
+pico-client --help
+```
+
+Which prints:
+
+```text
+pico-client 0.1.0
+Application that updates Raspberry Pi Pico W with MS Teams/Outlook status
+
+USAGE:
+    pico-client [OPTIONS] <PICO_IP> <CLIENT_ID> [TENANT_ID]
+
+ARGS:
+    <PICO_IP>      The IP address of the Pico your connecting to (e.g. 169.420.1.469)
+    <CLIENT_ID>    The OAuth Client ID of the registered application from Azure Portal
+    <TENANT_ID>    The MS tenant ID to connect to, including the 'common' tennant which is
+                   default [default: common]
+
+OPTIONS:
+    -a, --auth-wait-for <AUTH_WAIT_FOR>
+            The time, in seconds, that the pico-status tool will wait before killing the local
+            server that supports OAuth [default: 3]
+
+    -h, --help
+            Print help information
+
+    -p, --poll-after <POLL_AFTER>
+            The time, in seconds, that the tool waits before polling MS for your status and updating
+            the Pico W [default: 60]
+
+    -r, --refresh-expiry-padding <REFRESH_EXPIRY_PADDING>
+            The number of seconds that the pico-client will use to 'pad', or trim, the auth token's
+            expiry [default: 120]
+
+    -s, --scope <SCOPE>
+            The Scope to require on the auth token. Only scopes configured in the OAuth app will
+            work [default: "Presence.Read Calendars.Read offline_access"]
+
+    -v, --verbose
+            Include exxxtra verbose tracing
+
+    -V, --version
+            Print version information
+```
+
+An example of executing the client application would be something like:
+
+```shell
+pico-client 127.0.0.2 01e89a7d-fa38-4c97-9e8a-f97d932d5fdb common --auth-wait-for 30
+```
 
 From there, the client app takes over. It will fetch your Presence and
 CalendarView from the MS Graph API, interpret the results into a text based summary,
