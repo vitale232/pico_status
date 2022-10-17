@@ -82,7 +82,7 @@ async fn run_server(
 #[tracing::instrument]
 async fn handle_oauth_redirect(
     config: Extension<OAuthConfiguration>,
-    refresh_after: Extension<u64>,
+    Extension(refresh_after): Extension<u64>,
     Query(access): Query<AccessCode>,
 ) -> impl IntoResponse {
     tracing::debug!("Access code received at server with value {:#?}", access);
@@ -107,7 +107,7 @@ async fn handle_oauth_redirect(
           </body>
         </html>
         "#,
-        access.code, *refresh_after
+        access.code, refresh_after
     ))
 }
 
